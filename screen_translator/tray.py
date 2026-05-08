@@ -1,0 +1,125 @@
+"""System tray icon using AppIndicator3."""
+
+import gi
+gi.require_version("Gtk", "3.0")
+try:
+    gi.require_version("AyatanaAppIndicator3", "0.1")
+    from gi.repository import AyatanaAppIndicator3 as AppIndicator3
+except (ValueError, ImportError):
+    gi.require_version("AppIndicator3", "0.1")
+    from gi.repository import AppIndicator3
+
+from gi.repository import Gtk
+from screen_translator import __version__
+from screen_translator.translator import get_supported_languages
+
+
+# Common languages shown at top of menu
+COMMON_LANGS = [
+    ("Vietnamese", "vi"),
+    ("English", "en"),
+    ("Chinese (Simplified)", "zh-CN"),
+    ("Japanese", "ja"),
+    ("Korean", "ko"),
+    ("French", "fr"),
+    ("German", "de"),
+    ("Spanish", "es"),
+    ("Russian", "ru"),
+    ("Thai", "th"),
+]
+
+
+class TrayIcon:
+    """System tray icon with settings menu."""
+
+    def __init__(self, config, on_toggle_auto, on_change_target, on_quit):
+        """
+        Args:
+            config: current config dict
+            on_toggle_auto: callable(enabled: bool)
+            on_change_target: callable(lang_code: str)
+            on_quit: callable()
+        """
+        self._config = config
+        self._on_toggle_auto = on_toggle_auto
+        self._on_change_target = on_change_target
+        self._on_quit = on_quit
+
+        self._indicator = AppIndicator3.Indicator.new(
+            "screen-translator",
+            "preferences-desktop-locale",
+            AppIndicator3.IndicatorCategory.APPLICATION_STATUS,
+        )
+        self._indicator.set_status(AppIndicator3.IndicatorStatus.ACTIVE)
+        self._indicator.set_title("Screen Translator")
+
+        self._build_menu()
+
+    def _build_menu(self):
+        menu = Gtk.Menu()
+
+        # Title
+        title = Gtk.MenuItem(label=f"Screen Translator v{__version__}")
+        title.set_sensitive(False)
+        menu.append(title)
+        menu.append(Gtk.SeparatorMenuItem())
+
+        # Auto-translate toggle
+        self._auto_item = Gtk.CheckMenuItem(label="Auto-translate selections")
+        self._auto_item.set_active(self._config.get("auto_translate", True))
+        self._auto_item.connect("toggled", self._on_auto_toggled)
+        menu.append(self._auto_item)
+        menu.append(Gtk.SeparatorMenuItem())
+
+        # Target language submenu
+        lang_item = Gtk.MenuItem(label="Target Language")
+        lang_submenu = Gtk.Menu()
+        lang_item.set_submenu(lang_submenu)
+
+        current_target = self._config.get("target_language", "vi")
+        group = None
+
+        # Common languages first
+        for name, code in COMMON_LANGS:
+            item = Gtk.RadioMenuItem.new_with_label([], f"{name} ({code})")
+            if group:
+                item.join_group(group)
+            else:
+                group = item
+            if code == current_target:
+                item.set_active(True)
+            item.connect("toggled", self._on_lang_toggled, code)
+            lang_submenu.append(item)
+
+        lang_submenu.append(Gtk.SeparatorMenuItem())
+
+        # All other languages
+        all_langs = get_supported_languages()
+        common_codes = {c for _, c in COMMON_LANGS}
+        for name, code in sorted(all_langs.items()):
+            if code in common_codes:
+                continue
+            item = Gtk.RadioMenuItem.new_with_label([], f"{name} ({code})")
+            item.join_group(group)
+            if code == current_target:
+                item.set_active(True)
+            item.connect("toggled", self._on_lang_toggled, code)
+            lang_submenu.append(item)
+
+        menu.append(lang_item)
+        menu.append(Gtk.SeparatorMenuItem())
+
+        # Quit
+        quit_item = Gtk.MenuItem(label="Quit")
+        quit_item.connect("activate", lambda _: self._on_quit())
+        menu.append(quit_item)
+
+        menu.show_all()
+        self._indicator.set_menu(menu)
+
+    def _on_auto_toggled(self, item):
+        self._on_toggle_auto(item.get_active())
+
+    def _on_lang_toggled(self, item, code):
+        if item.get_active():
+            self._on_change_target(code)

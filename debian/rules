@@ -1,0 +1,24 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@ --buildsystem=none
+
+override_dh_auto_install:
+	# Install Python package
+	mkdir -p debian/screen-translator/opt/screen-translator
+	cp -r screen_translator debian/screen-translator/opt/screen-translator/
+	cp requirements.txt debian/screen-translator/opt/screen-translator/
+	cp setup.py debian/screen-translator/opt/screen-translator/
+
+	# Install launcher script
+	mkdir -p debian/screen-translator/usr/bin
+	cp data/screen-translator.sh debian/screen-translator/usr/bin/screen-translator
+	chmod 755 debian/screen-translator/usr/bin/screen-translator
+
+	# Install desktop file
+	mkdir -p debian/screen-translator/usr/share/applications
+	cp data/screen-translator.desktop debian/screen-translator/usr/share/applications/
+
+	# Install autostart
+	mkdir -p debian/screen-translator/etc/xdg/autostart
+	cp data/screen-translator-autostart.desktop debian/screen-translator/etc/xdg/autostart/screen-translator.desktop

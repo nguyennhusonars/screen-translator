@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=Screen Translator
+Comment=Auto-translate highlighted text
+Exec=screen-translator
+Icon=preferences-desktop-locale
+Terminal=false
+Type=Application
+Categories=Utility;Translation;
+Keywords=translate;translator;language;
+StartupNotify=false
+X-GNOME-Autostart-enabled=true

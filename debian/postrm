@@ -1,0 +1,10 @@
+#!/bin/bash
+set -e
+
+if [ "$1" = "purge" ]; then
+    rm -rf /opt/screen-translator/lib
+    rm -rf /opt/screen-translator/__pycache__
+    rm -rf /opt/screen-translator/screen_translator/__pycache__
+    rmdir /opt/screen-translator/screen_translator 2>/dev/null || true
+    rmdir /opt/screen-translator 2>/dev/null || true
+fi

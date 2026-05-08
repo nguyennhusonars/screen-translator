@@ -1,0 +1,10 @@
+#!/bin/bash
+set -e
+
+# Install Python dependencies into the app's own lib directory using system Python
+/usr/bin/python3 -m pip install --target=/opt/screen-translator/lib deep-translator>=1.11.4 2>/dev/null || \
+/usr/bin/pip3 install --target=/opt/screen-translator/lib deep-translator>=1.11.4 2>/dev/null || \
+echo "Warning: Could not install deep-translator. Please run: /usr/bin/python3 -m pip install deep-translator"
+
+echo "Screen Translator installed successfully."
+echo "Launch from Applications menu or run: screen-translator"

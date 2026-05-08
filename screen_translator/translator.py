@@ -1,8 +1,11 @@
 """Translation engine using Google Translate (free, no API key)."""
 
+import logging
 import threading
 from deep_translator import GoogleTranslator
 from deep_translator.constants import GOOGLE_LANGUAGES_TO_CODES
+
+log = logging.getLogger(__name__)
 
 
 # Cache recent translations to avoid repeated API calls

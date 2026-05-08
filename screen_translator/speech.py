@@ -24,7 +24,7 @@ def speak(text, lang="en"):
             with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
                 temp_name = f.name
 
-            log.info("Generating speech for: %.50s...", text)
+            log.info("Generating speech for: %.50s... (lang=%s)", text, lang)
             tts = gTTS(text=text, lang=lang)
             tts.save(temp_name)
 

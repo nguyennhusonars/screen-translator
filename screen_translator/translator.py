@@ -40,13 +40,13 @@ def translate(text, target_lang="vi", source_lang="auto"):
         actual_source = source_lang
         if source_lang == "auto":
             try:
-                actual_source = translator.get_supported_languages(as_dict=True).get(
-                    translator.detect_language(text), "en"
-                )
-                # Note: deep-translator's detect_language returns the name, 
-                # we might need the code. Let's simplify.
-                actual_source = translator.detect_language(text) 
-            except:
+                # Get detected language (usually returns code like 'en')
+                detected = translator.detect_language(text)
+                # Ensure it's a code gTTS understands (e.g., 'en' not 'english')
+                # GoogleTranslator.detect_language usually returns the code already.
+                actual_source = detected
+            except Exception as e:
+                log.warning("Language detection failed: %s", e)
                 actual_source = "en"
 
         result = {

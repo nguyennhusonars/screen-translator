@@ -6,10 +6,11 @@ screen-translator (1.1.0-1) stable; urgency=low
 
  -- sonnn <sonnn@localhost>  Fri, 08 May 2026 16:53:00 +0700
 
+screen-translator (1.0.0-1) stable; urgency=low
+
   * Initial release
   * Auto-detect and translate highlighted text
+  * Popup near cursor with copy button
   * System tray integration
-  * Target language selection
-  * Translation caching
 
- -- sonnn <sonnn@localhost>  Thu, 08 May 2026 16:00:00 +0700
+ -- sonnn <sonnn@localhost>  Fri, 08 May 2026 15:30:00 +0700

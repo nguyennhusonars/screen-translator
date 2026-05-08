@@ -25,7 +25,11 @@ def speak(text, lang="en"):
                 temp_name = f.name
 
             log.info("Generating speech for: %.50s... (lang=%s)", text, lang)
-            tts = gTTS(text=text, lang=lang)
+            try:
+                tts = gTTS(text=text, lang=lang)
+            except ValueError:
+                log.warning("Language '%s' not supported by gTTS, falling back to 'en'", lang)
+                tts = gTTS(text=text, lang="en")
             tts.save(temp_name)
 
             log.info("Playing speech via mpv...")

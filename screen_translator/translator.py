@@ -47,8 +47,12 @@ def translate(text, target_lang="vi", source_lang="auto"):
             try:
                 # Use langdetect for faster, reliable local detection
                 actual_source = detect(text)
-                # langdetect returns 'zh-cn' for Chinese, gTTS expects 'zh-CN'
-                # but it usually handles lowercase fine.
+                # Normalize for gTTS (e.g., 'zh-cn' -> 'zh-CN')
+                norm_map = {
+                    "zh-cn": "zh-CN",
+                    "zh-tw": "zh-TW",
+                }
+                actual_source = norm_map.get(actual_source, actual_source)
                 log.info("Detected source language: %s", actual_source)
             except Exception as e:
                 log.warning("Language detection failed: %s", e)

@@ -6,6 +6,7 @@ Auto-translate highlighted text on Ubuntu. Select any text and see the translati
 
 - **Auto-detect language** of selected text
 - **Instant popup** with translation near your cursor
+- **Text-to-Speech (TTS)**: Listen to the translated text aloud
 - **System tray** icon with settings menu
 - **Target language selector** (100+ languages, Vietnamese default)
 - **Translation cache** to avoid repeated API calls

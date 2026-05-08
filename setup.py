@@ -9,6 +9,7 @@ setup(
     python_requires=">=3.8",
     install_requires=[
         "deep-translator>=1.11.4",
+        "gTTS>=2.3.2",
     ],
     entry_points={
         "console_scripts": [

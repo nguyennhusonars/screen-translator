@@ -5,6 +5,7 @@ import gi
 gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
 from gi.repository import Gtk, Gdk, GLib, Pango
+from screen_translator.speech import speak
 
 log = logging.getLogger(__name__)
 
@@ -83,6 +84,23 @@ CSS = b"""
 
 #copy-button:hover {
     background-color: #585b70;
+}
+
+#speech-button {
+    background-color: #45475a;
+    color: #cdd6f4;
+    border: none;
+    border-radius: 6px;
+    padding: 4px 10px;
+    margin: 0 0 10px 5px;
+    font-size: 11px;
+    min-width: 0;
+    min-height: 0;
+}
+
+#speech-button:hover {
+    background-color: #fab387;
+    color: #1e1e2e;
 }
 """
 
@@ -194,12 +212,28 @@ class TranslationPopup(Gtk.Window):
             trans_lbl.set_selectable(True)
             self._content.pack_start(trans_lbl, False, False, 0)
 
+            # Action buttons
+            actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+            self._content.pack_start(actions, False, False, 0)
+
             # Copy button
             copy_btn = Gtk.Button(label="📋 Copy")
             copy_btn.set_name("copy-button")
             copy_btn.set_halign(Gtk.Align.START)
             copy_btn.connect("clicked", self._on_copy)
-            self._content.pack_start(copy_btn, False, False, 0)
+            actions.pack_start(copy_btn, False, False, 0)
+
+            # Speech button
+            speech_btn = Gtk.Button(label="🔊 Listen")
+            speech_btn.set_name("speech-button")
+            speech_btn.set_halign(Gtk.Align.START)
+            
+            # Use target language for speech
+            # result['target'] is the code (e.g. 'vi', 'en')
+            lang = result.get('target', 'en')
+            text = result.get('translated', '')
+            speech_btn.connect("clicked", lambda _: speak(text, lang))
+            actions.pack_start(speech_btn, False, False, 0)
 
         self._position_and_show()
 

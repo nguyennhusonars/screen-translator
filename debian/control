@@ -12,6 +12,7 @@ Depends: python3 (>= 3.8),
          gir1.2-gtk-3.0,
          gir1.2-ayatanaappindicator3-0.1 | gir1.2-appindicator3-0.1,
          python3-pip,
+         mpv,
          ${misc:Depends}
 Description: Auto-translate highlighted text on Ubuntu
  Screen Translator monitors your text selections and automatically

@@ -1,3 +1,11 @@
+screen-translator (1.2.0-1) stable; urgency=low
+
+  * Added "Start at Login" toggle in the system tray menu
+  * Added autostart management module
+  * Improved dual-speech stability
+
+ -- sonnn <sonnn@localhost>  Fri, 08 May 2026 17:15:00 +0700
+
 screen-translator (1.1.1-1) stable; urgency=low
 
   * Improved language detection using langdetect

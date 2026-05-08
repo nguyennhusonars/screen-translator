@@ -6,7 +6,7 @@ import gi
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk, GLib
 
-from screen_translator import config
+from screen_translator import config, autostart
 from screen_translator.clipboard import ClipboardMonitor
 from screen_translator.popup import TranslationPopup
 from screen_translator.tray import TrayIcon
@@ -30,20 +30,15 @@ class ScreenTranslator:
                  self._config["auto_translate"])
 
         self._popup = TranslationPopup()
-
-        self._clipboard = ClipboardMonitor(
-            on_selection=self._on_text_selected,
-            delay_ms=self._config["selection_delay_ms"],
-            min_length=self._config["min_text_length"],
-            max_length=self._config["max_text_length"],
-        )
-
         self._tray = TrayIcon(
-            config=self._config,
+            self._config,
             on_toggle_auto=self._on_toggle_auto,
+            on_toggle_autostart=self._on_toggle_autostart,
             on_change_target=self._on_change_target,
             on_quit=self._quit,
         )
+        self._clipboard = ClipboardMonitor(self._on_text_selected)
+        self._translator_thread = None
         log.info("Screen Translator started. Waiting for text selections...")
 
     def _on_text_selected(self, text):
@@ -79,6 +74,10 @@ class ScreenTranslator:
             timeout = self._config.get("popup_timeout", 8)
             self._popup.set_auto_dismiss(timeout)
         GLib.idle_add(_show)
+
+    def _on_toggle_autostart(self, enabled):
+        """Called when user toggles 'Start at Login' in tray."""
+        autostart.set_enabled(enabled)
 
     def _on_toggle_auto(self, enabled):
         self._config["auto_translate"] = enabled

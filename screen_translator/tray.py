@@ -32,16 +32,18 @@ COMMON_LANGS = [
 class TrayIcon:
     """System tray icon with settings menu."""
 
-    def __init__(self, config, on_toggle_auto, on_change_target, on_quit):
+    def __init__(self, config, on_toggle_auto, on_toggle_autostart, on_change_target, on_quit):
         """
         Args:
             config: current config dict
             on_toggle_auto: callable(enabled: bool)
+            on_toggle_autostart: callable(enabled: bool)
             on_change_target: callable(lang_code: str)
             on_quit: callable()
         """
         self._config = config
         self._on_toggle_auto = on_toggle_auto
+        self._on_toggle_autostart = on_toggle_autostart
         self._on_change_target = on_change_target
         self._on_quit = on_quit
 
@@ -69,6 +71,14 @@ class TrayIcon:
         self._auto_item.set_active(self._config.get("auto_translate", True))
         self._auto_item.connect("toggled", self._on_auto_toggled)
         menu.append(self._auto_item)
+
+        # Autostart toggle
+        from screen_translator import autostart
+        self._autostart_item = Gtk.CheckMenuItem(label="Start at Login")
+        self._autostart_item.set_active(autostart.is_enabled())
+        self._autostart_item.connect("toggled", self._on_autostart_toggled)
+        menu.append(self._autostart_item)
+
         menu.append(Gtk.SeparatorMenuItem())
 
         # Target language submenu
@@ -119,6 +129,9 @@ class TrayIcon:
 
     def _on_auto_toggled(self, item):
         self._on_toggle_auto(item.get_active())
+
+    def _on_autostart_toggled(self, item):
+        self._on_toggle_autostart(item.get_active())
 
     def _on_lang_toggled(self, item, code):
         if item.get_active():

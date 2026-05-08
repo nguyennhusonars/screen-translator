@@ -4,6 +4,10 @@ import logging
 import threading
 from deep_translator import GoogleTranslator
 from deep_translator.constants import GOOGLE_LANGUAGES_TO_CODES
+from langdetect import detect, DetectorFactory
+
+# Set seed for reproducible language detection
+DetectorFactory.seed = 0
 
 log = logging.getLogger(__name__)
 
@@ -37,20 +41,21 @@ def translate(text, target_lang="vi", source_lang="auto"):
 
     try:
         translator = GoogleTranslator(source=source_lang, target=target_lang)
-        translated = translator.translate(text)
-
         # Detect language if source was 'auto'
         actual_source = source_lang
         if source_lang == "auto":
             try:
-                # Get detected language (usually returns code like 'en')
-                detected = translator.detect_language(text)
-                # Ensure it's a code gTTS understands (e.g., 'en' not 'english')
-                # GoogleTranslator.detect_language usually returns the code already.
-                actual_source = detected
+                # Use langdetect for faster, reliable local detection
+                actual_source = detect(text)
+                # langdetect returns 'zh-cn' for Chinese, gTTS expects 'zh-CN'
+                # but it usually handles lowercase fine.
+                log.info("Detected source language: %s", actual_source)
             except Exception as e:
                 log.warning("Language detection failed: %s", e)
                 actual_source = "en"
+
+        translator = GoogleTranslator(source=actual_source, target=target_lang)
+        translated = translator.translate(text)
 
         result = {
             "source": actual_source,

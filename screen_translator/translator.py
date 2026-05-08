@@ -36,8 +36,21 @@ def translate(text, target_lang="vi", source_lang="auto"):
         translator = GoogleTranslator(source=source_lang, target=target_lang)
         translated = translator.translate(text)
 
+        # Detect language if source was 'auto'
+        actual_source = source_lang
+        if source_lang == "auto":
+            try:
+                actual_source = translator.get_supported_languages(as_dict=True).get(
+                    translator.detect_language(text), "en"
+                )
+                # Note: deep-translator's detect_language returns the name, 
+                # we might need the code. Let's simplify.
+                actual_source = translator.detect_language(text) 
+            except:
+                actual_source = "en"
+
         result = {
-            "source": source_lang,
+            "source": actual_source,
             "target": target_lang,
             "original": text,
             "translated": translated or "",

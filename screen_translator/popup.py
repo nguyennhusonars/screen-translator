@@ -188,7 +188,14 @@ class TranslationPopup(Gtk.Window):
             tgt = result.get("target", "?")
             self._header_label.set_text(f"{src} → {tgt}")
 
-            # Original text (truncated if long)
+            # Original text section
+            orig_hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+            orig_hbox.set_margin_start(14)
+            orig_hbox.set_margin_end(14)
+            orig_hbox.set_margin_top(8)
+            orig_hbox.set_margin_bottom(4)
+            self._content.pack_start(orig_hbox, False, False, 0)
+
             orig = result["original"]
             if len(orig) > 150:
                 orig = orig[:147] + "..."
@@ -197,43 +204,52 @@ class TranslationPopup(Gtk.Window):
             orig_lbl.set_halign(Gtk.Align.START)
             orig_lbl.set_line_wrap(True)
             orig_lbl.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR)
-            orig_lbl.set_max_width_chars(45)
+            orig_lbl.set_max_width_chars(40)
             orig_lbl.set_selectable(True)
-            self._content.pack_start(orig_lbl, False, False, 0)
+            orig_hbox.pack_start(orig_lbl, True, True, 0)
 
-            # Translated text
+            src_speech_btn = Gtk.Button(label="🔊")
+            src_speech_btn.set_name("speech-button")
+            src_speech_btn.set_tooltip_text("Listen to original")
+            src_speech_btn.set_valign(Gtk.Align.START)
+            src_speech_btn.connect("clicked", lambda _: speak(result["original"], result.get("source", "en")))
+            orig_hbox.pack_start(src_speech_btn, False, False, 0)
+
+            # Translated text section
+            trans_hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+            trans_hbox.set_margin_start(14)
+            trans_hbox.set_margin_end(14)
+            trans_hbox.set_margin_top(4)
+            trans_hbox.set_margin_bottom(10)
+            self._content.pack_start(trans_hbox, False, False, 0)
+
             self._translated_text = result.get("translated", "")
             trans_lbl = Gtk.Label(label=self._translated_text)
             trans_lbl.set_name("translated-text")
             trans_lbl.set_halign(Gtk.Align.START)
             trans_lbl.set_line_wrap(True)
             trans_lbl.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR)
-            trans_lbl.set_max_width_chars(45)
+            trans_lbl.set_max_width_chars(40)
             trans_lbl.set_selectable(True)
-            self._content.pack_start(trans_lbl, False, False, 0)
+            trans_hbox.pack_start(trans_lbl, True, True, 0)
 
-            # Action buttons
+            tgt_speech_btn = Gtk.Button(label="🔊")
+            tgt_speech_btn.set_name("speech-button")
+            tgt_speech_btn.set_tooltip_text("Listen to translation")
+            tgt_speech_btn.set_valign(Gtk.Align.START)
+            tgt_speech_btn.connect("clicked", lambda _: speak(self._translated_text, result.get("target", "en")))
+            trans_hbox.pack_start(tgt_speech_btn, False, False, 0)
+
+            # Footer Action buttons
             actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+            actions.set_margin_start(14)
+            actions.set_margin_bottom(10)
             self._content.pack_start(actions, False, False, 0)
 
-            # Copy button
-            copy_btn = Gtk.Button(label="📋 Copy")
+            copy_btn = Gtk.Button(label="📋 Copy Translation")
             copy_btn.set_name("copy-button")
-            copy_btn.set_halign(Gtk.Align.START)
             copy_btn.connect("clicked", self._on_copy)
             actions.pack_start(copy_btn, False, False, 0)
-
-            # Speech button
-            speech_btn = Gtk.Button(label="🔊 Listen")
-            speech_btn.set_name("speech-button")
-            speech_btn.set_halign(Gtk.Align.START)
-            
-            # Use target language for speech
-            # result['target'] is the code (e.g. 'vi', 'en')
-            lang = result.get('target', 'en')
-            text = result.get('translated', '')
-            speech_btn.connect("clicked", lambda _: speak(text, lang))
-            actions.pack_start(speech_btn, False, False, 0)
 
         self._position_and_show()
 

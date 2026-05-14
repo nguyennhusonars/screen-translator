@@ -31,7 +31,15 @@ def translate(text, target_lang="vi", source_lang="auto"):
       - translated: translated text
       - error: error message if failed, else None
     """
-    text = text.strip()
+    # Clean up text: replace single newlines with spaces to preserve context, 
+    # but keep double newlines for paragraphs.
+    text = text.replace('\r\n', '\n').strip()
+    # Replace single newlines that are not followed by another newline
+    import re
+    text = re.sub(r'(?<!\n)\n(?!\n)', ' ', text)
+    # Collapse multiple spaces
+    text = re.sub(r' +', ' ', text)
+
     if not text:
         return None
 

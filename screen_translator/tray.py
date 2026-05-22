@@ -146,6 +146,17 @@ class TrayIcon:
 
         menu.append(Gtk.SeparatorMenuItem())
 
+        # Study History
+        history_item = Gtk.MenuItem(label="📖 View Study History")
+        history_item.connect("activate", lambda _: self._on_view_history())
+        menu.append(history_item)
+
+        clear_history_item = Gtk.MenuItem(label="🗑️ Clear Study History")
+        clear_history_item.connect("activate", lambda _: self._on_clear_history())
+        menu.append(clear_history_item)
+
+        menu.append(Gtk.SeparatorMenuItem())
+
         # Quit
         quit_item = Gtk.MenuItem(label="Quit")
         quit_item.connect("activate", lambda _: self._on_quit())
@@ -159,4 +170,12 @@ class TrayIcon:
 
     def _on_autostart_toggled(self, item):
         self._on_toggle_autostart(item.get_active())
+
+    def _on_view_history(self):
+        from screen_translator.history import open_history
+        open_history()
+
+    def _on_clear_history(self):
+        from screen_translator.history import clear_history
+        clear_history()
 

@@ -1,3 +1,11 @@
+screen-translator (1.4.0-1) stable; urgency=low
+
+  * Added "Save to Study" button to translation popup window
+  * Implemented study history backend saving translations to Markdown
+  * Added "View Study History" and "Clear Study History" to tray menu
+
+ -- sonnn <sonnn@localhost>  Fri, 22 May 2026 15:55:00 +0700
+
 screen-translator (1.3.0-1) stable; urgency=low
 
   * Added "Source Language" submenu to system tray icon

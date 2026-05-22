@@ -76,7 +76,7 @@ CSS = b"""
     border: none;
     border-radius: 6px;
     padding: 4px 10px;
-    margin: 0 14px 10px 14px;
+    margin: 0 6px 0 0;
     font-size: 11px;
     min-width: 0;
     min-height: 0;
@@ -84,6 +84,23 @@ CSS = b"""
 
 #copy-button:hover {
     background-color: #585b70;
+}
+
+#save-button {
+    background-color: #45475a;
+    color: #cdd6f4;
+    border: none;
+    border-radius: 6px;
+    padding: 4px 10px;
+    margin: 0;
+    font-size: 11px;
+    min-width: 0;
+    min-height: 0;
+}
+
+#save-button:hover {
+    background-color: #a6e3a1;
+    color: #1e1e2e;
 }
 
 #speech-button {
@@ -197,6 +214,10 @@ class TranslationPopup(Gtk.Window):
             self._content.pack_start(orig_hbox, False, False, 0)
 
             orig = result["original"]
+            self._original_text = orig
+            self._source_lang = result.get("source", "auto")
+            self._target_lang = result.get("target", "en")
+
             if len(orig) > 150:
                 orig = orig[:147] + "..."
             orig_lbl = Gtk.Label(label=orig)
@@ -251,6 +272,11 @@ class TranslationPopup(Gtk.Window):
             copy_btn.connect("clicked", self._on_copy)
             actions.pack_start(copy_btn, False, False, 0)
 
+            save_btn = Gtk.Button(label="💾 Save to Study")
+            save_btn.set_name("save-button")
+            save_btn.connect("clicked", self._on_save)
+            actions.pack_start(save_btn, False, False, 0)
+
         self._position_and_show()
 
     def show_result_threadsafe(self, result):
@@ -282,7 +308,19 @@ class TranslationPopup(Gtk.Window):
         clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
         clipboard.set_text(self._translated_text, -1)
         button.set_label("✓ Copied")
-        GLib.timeout_add(1500, lambda: button.set_label("📋 Copy") or False)
+        GLib.timeout_add(1500, lambda: button.set_label("📋 Copy Translation") or False)
+
+    def _on_save(self, button):
+        from screen_translator.history import save_translation
+        success = save_translation(
+            self._original_text,
+            self._translated_text,
+            self._source_lang,
+            self._target_lang
+        )
+        if success:
+            button.set_label("✓ Saved")
+            button.set_sensitive(False)
 
     def _clear_content(self):
         for child in self._content.get_children():

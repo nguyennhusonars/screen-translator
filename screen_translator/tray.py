@@ -32,18 +32,20 @@ COMMON_LANGS = [
 class TrayIcon:
     """System tray icon with settings menu."""
 
-    def __init__(self, config, on_toggle_auto, on_toggle_autostart, on_change_target, on_quit):
+    def __init__(self, config, on_toggle_auto, on_toggle_autostart, on_change_source, on_change_target, on_quit):
         """
         Args:
             config: current config dict
             on_toggle_auto: callable(enabled: bool)
             on_toggle_autostart: callable(enabled: bool)
+            on_change_source: callable(lang_code: str)
             on_change_target: callable(lang_code: str)
             on_quit: callable()
         """
         self._config = config
         self._on_toggle_auto = on_toggle_auto
         self._on_toggle_autostart = on_toggle_autostart
+        self._on_change_source = on_change_source
         self._on_change_target = on_change_target
         self._on_quit = on_quit
 
@@ -56,6 +58,47 @@ class TrayIcon:
         self._indicator.set_title("Screen Translator")
 
         self._build_menu()
+
+    def _create_lang_menu(self, current_code, on_change_callback, include_auto=False):
+        submenu = Gtk.Menu()
+        group = None
+
+        if include_auto:
+            item = Gtk.RadioMenuItem.new_with_label([], "Auto Detect (auto)")
+            group = item
+            if current_code == "auto":
+                item.set_active(True)
+            item.connect("toggled", lambda w: w.get_active() and on_change_callback("auto"))
+            submenu.append(item)
+
+        # Common languages
+        for name, code in COMMON_LANGS:
+            item = Gtk.RadioMenuItem.new_with_label([], f"{name} ({code})")
+            if group:
+                item.join_group(group)
+            else:
+                group = item
+            if code == current_code:
+                item.set_active(True)
+            item.connect("toggled", lambda w, c=code: w.get_active() and on_change_callback(c))
+            submenu.append(item)
+
+        submenu.append(Gtk.SeparatorMenuItem())
+
+        # All other languages
+        all_langs = get_supported_languages()
+        common_codes = {c for _, c in COMMON_LANGS}
+        for name, code in sorted(all_langs.items()):
+            if code in common_codes:
+                continue
+            item = Gtk.RadioMenuItem.new_with_label([], f"{name} ({code})")
+            item.join_group(group)
+            if code == current_code:
+                item.set_active(True)
+            item.connect("toggled", lambda w, c=code: w.get_active() and on_change_callback(c))
+            submenu.append(item)
+
+        return submenu
 
     def _build_menu(self):
         menu = Gtk.Menu()
@@ -81,42 +124,26 @@ class TrayIcon:
 
         menu.append(Gtk.SeparatorMenuItem())
 
+        # Source language submenu
+        src_item = Gtk.MenuItem(label="Source Language")
+        src_submenu = self._create_lang_menu(
+            current_code=self._config.get("source_language", "auto"),
+            on_change_callback=self._on_change_source,
+            include_auto=True
+        )
+        src_item.set_submenu(src_submenu)
+        menu.append(src_item)
+
         # Target language submenu
-        lang_item = Gtk.MenuItem(label="Target Language")
-        lang_submenu = Gtk.Menu()
-        lang_item.set_submenu(lang_submenu)
+        tgt_item = Gtk.MenuItem(label="Target Language")
+        tgt_submenu = self._create_lang_menu(
+            current_code=self._config.get("target_language", "vi"),
+            on_change_callback=self._on_change_target,
+            include_auto=False
+        )
+        tgt_item.set_submenu(tgt_submenu)
+        menu.append(tgt_item)
 
-        current_target = self._config.get("target_language", "vi")
-        group = None
-
-        # Common languages first
-        for name, code in COMMON_LANGS:
-            item = Gtk.RadioMenuItem.new_with_label([], f"{name} ({code})")
-            if group:
-                item.join_group(group)
-            else:
-                group = item
-            if code == current_target:
-                item.set_active(True)
-            item.connect("toggled", self._on_lang_toggled, code)
-            lang_submenu.append(item)
-
-        lang_submenu.append(Gtk.SeparatorMenuItem())
-
-        # All other languages
-        all_langs = get_supported_languages()
-        common_codes = {c for _, c in COMMON_LANGS}
-        for name, code in sorted(all_langs.items()):
-            if code in common_codes:
-                continue
-            item = Gtk.RadioMenuItem.new_with_label([], f"{name} ({code})")
-            item.join_group(group)
-            if code == current_target:
-                item.set_active(True)
-            item.connect("toggled", self._on_lang_toggled, code)
-            lang_submenu.append(item)
-
-        menu.append(lang_item)
         menu.append(Gtk.SeparatorMenuItem())
 
         # Quit
@@ -133,6 +160,3 @@ class TrayIcon:
     def _on_autostart_toggled(self, item):
         self._on_toggle_autostart(item.get_active())
 
-    def _on_lang_toggled(self, item, code):
-        if item.get_active():
-            self._on_change_target(code)

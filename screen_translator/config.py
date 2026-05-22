@@ -7,6 +7,7 @@ CONFIG_DIR = os.path.join(os.path.expanduser("~"), ".config", "screen-translator
 CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
 
 DEFAULTS = {
+    "source_language": "auto",      # Default source: Auto-detect
     "target_language": "vi",        # Default target: Vietnamese
     "auto_translate": True,         # Auto-translate on selection
     "popup_timeout": 8,             # Seconds before popup auto-hides (0 = never)

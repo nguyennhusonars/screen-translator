@@ -34,6 +34,7 @@ class ScreenTranslator:
             self._config,
             on_toggle_auto=self._on_toggle_auto,
             on_toggle_autostart=self._on_toggle_autostart,
+            on_change_source=self._on_change_source,
             on_change_target=self._on_change_target,
             on_quit=self._quit,
         )
@@ -55,11 +56,13 @@ class ScreenTranslator:
         GLib.idle_add(self._popup.show_loading)
 
         # Translate in background
+        source = self._config.get("source_language", "auto")
         target = self._config.get("target_language", "vi")
         translate_async(
             text,
             target_lang=target,
             callback=self._on_translation_done,
+            source_lang=source,
         )
 
     def _on_translation_done(self, result):
@@ -86,6 +89,11 @@ class ScreenTranslator:
         log.info("Auto-translate: %s", enabled)
         if not enabled:
             self._popup.dismiss()
+
+    def _on_change_source(self, lang_code):
+        self._config["source_language"] = lang_code
+        config.save(self._config)
+        log.info("Source language: %s", lang_code)
 
     def _on_change_target(self, lang_code):
         self._config["target_language"] = lang_code

@@ -1,4 +1,15 @@
+screen-translator (1.4.1-1) stable; urgency=low
+
+  * Replaced xdg-open with a native GTK Study History window
+  * History window shows all saved translations with timestamps
+  * Added per-row TTS buttons to play back Original and Translation
+  * Added per-row Delete button and a Clear All action with confirmation
+  * History now stored in structured JSON instead of Markdown
+
+ -- sonnn <sonnn@localhost>  Thu, 22 May 2026 16:10:00 +0700
+
 screen-translator (1.4.0-1) stable; urgency=low
+
 
   * Added "Save to Study" button to translation popup window
   * Implemented study history backend saving translations to Markdown

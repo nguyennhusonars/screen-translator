@@ -172,10 +172,19 @@ class TrayIcon:
         self._on_toggle_autostart(item.get_active())
 
     def _on_view_history(self):
-        from screen_translator.history import open_history
-        open_history()
+        from screen_translator.history_window import HistoryWindow
+        # Keep reference so GC doesn't destroy the window
+        if not hasattr(self, "_history_win") or self._history_win is None:
+            self._history_win = HistoryWindow()
+            self._history_win.connect("destroy", lambda w: setattr(self, "_history_win", None))
+            self._history_win.show_all()
+        else:
+            self._history_win.load_items()
+            self._history_win.present()
 
     def _on_clear_history(self):
         from screen_translator.history import clear_history
         clear_history()
+        if hasattr(self, "_history_win") and self._history_win is not None:
+            self._history_win.load_items()
 

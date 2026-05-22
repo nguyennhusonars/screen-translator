@@ -1,43 +1,53 @@
-"""Study history management."""
+"""Study history management with structured JSON storage."""
 
 import os
+import json
 import logging
-import subprocess
+import uuid
 from datetime import datetime
 
 log = logging.getLogger(__name__)
 
 HISTORY_DIR = os.path.join(os.path.expanduser("~"), ".config", "screen-translator")
-HISTORY_FILE = os.path.join(HISTORY_DIR, "history.md")
+HISTORY_FILE = os.path.join(HISTORY_DIR, "history.json")
 
-HEADER = """# Screen Translator - Study History
 
-This file contains your saved translations for study and review.
-You can open this file in any text or Markdown editor.
-
----
-"""
+def load_history():
+    """Load translation history list from JSON file."""
+    if not os.path.exists(HISTORY_FILE):
+        return []
+    try:
+        with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        log.error("Failed to load history JSON: %s", e)
+        return []
 
 
 def save_translation(original, translated, source_lang, target_lang):
-    """Save a translation entry to the Markdown history file."""
+    """Save a translation entry to the structured JSON history."""
     try:
         os.makedirs(HISTORY_DIR, exist_ok=True)
+        history = load_history()
         
-        # Write header if file does not exist
-        if not os.path.exists(HISTORY_FILE):
-            with open(HISTORY_FILE, "w", encoding="utf-8") as f:
-                f.write(HEADER)
-                
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        entry = f"""*   **[{timestamp}]** `{source_lang}` → `{target_lang}`
-    *   **Original:** {original.strip()}
-    *   **Translation:** {translated.strip()}
-
----
-"""
-        with open(HISTORY_FILE, "a", encoding="utf-8") as f:
-            f.write(entry)
+        # Avoid duplicate consecutive entries
+        if history and history[0]["original"] == original and history[0]["translated"] == translated:
+            return True
+            
+        entry = {
+            "id": str(uuid.uuid4()),
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "original": original.strip(),
+            "translated": translated.strip(),
+            "source": source_lang,
+            "target": target_lang
+        }
+        
+        # Prepend to show newest first
+        history.insert(0, entry)
+        
+        with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+            json.dump(history, f, indent=2, ensure_ascii=False)
             
         log.info("Saved translation to history: %.40s", original)
         return True
@@ -46,20 +56,19 @@ def save_translation(original, translated, source_lang, target_lang):
         return False
 
 
-def open_history():
-    """Open the study history file using the default system editor."""
+def delete_entry(entry_id):
+    """Delete a specific entry from the history by its ID."""
     try:
-        os.makedirs(HISTORY_DIR, exist_ok=True)
-        if not os.path.exists(HISTORY_FILE):
-            with open(HISTORY_FILE, "w", encoding="utf-8") as f:
-                f.write(HEADER)
-                
-        # Open in background with xdg-open
-        subprocess.Popen(["xdg-open", HISTORY_FILE], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        log.info("Opened history file: %s", HISTORY_FILE)
+        history = load_history()
+        updated_history = [item for item in history if item["id"] != entry_id]
+        
+        with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+            json.dump(updated_history, f, indent=2, ensure_ascii=False)
+            
+        log.info("Deleted history entry: %s", entry_id)
         return True
     except Exception as e:
-        log.error("Failed to open history file: %s", e)
+        log.error("Failed to delete history entry: %s", e)
         return False
 
 

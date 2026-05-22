@@ -14,13 +14,13 @@ CSS = b"""
 
 #history-header-bar {
     background-color: #313244;
-    padding: 10px;
+    padding: 6px 10px;
     border-bottom: 1px solid #45475a;
 }
 
 #history-title {
     color: #cdd6f4;
-    font-size: 16px;
+    font-size: 14px;
     font-weight: bold;
 }
 
@@ -34,55 +34,59 @@ CSS = b"""
 
 .history-row {
     background-color: #181825;
-    border: 1px solid #313244;
-    border-radius: 8px;
-    padding: 12px;
-    margin: 6px 12px;
+    border-bottom: 1px solid #313244;
+    padding: 5px 10px;
+    margin: 0;
 }
 
 .history-row:hover {
-    background-color: #24273a;
-    border-color: #45475a;
+    background-color: #1e1e3e;
 }
 
 .history-meta {
-    color: #a6adc8;
+    color: #6c7086;
     font-size: 10px;
 }
 
 .history-original {
     color: #bac2de;
-    font-size: 13px;
+    font-size: 12px;
+}
+
+.history-arrow {
+    color: #6c7086;
+    font-size: 12px;
 }
 
 .history-translated {
     color: #a6e3a1;
-    font-size: 15px;
+    font-size: 12px;
     font-weight: bold;
 }
 
-.history-action-btn {
-    background-color: #313244;
-    color: #cdd6f4;
+.history-icon-btn {
+    background: none;
+    color: #6c7086;
     border: none;
-    border-radius: 4px;
-    padding: 3px 8px;
-    font-size: 11px;
+    border-radius: 3px;
+    padding: 1px 4px;
+    font-size: 12px;
     min-width: 0;
     min-height: 0;
 }
 
-.history-action-btn:hover {
-    background-color: #45475a;
+.history-icon-btn:hover {
+    background-color: #313244;
+    color: #cdd6f4;
 }
 
 .history-delete-btn {
-    background-color: #313244;
-    color: #f38ba8;
+    background: none;
+    color: #6c7086;
     border: none;
-    border-radius: 4px;
-    padding: 3px 6px;
-    font-size: 11px;
+    border-radius: 3px;
+    padding: 1px 4px;
+    font-size: 12px;
     min-width: 0;
     min-height: 0;
 }
@@ -97,8 +101,9 @@ CSS = b"""
     color: #1e1e2e;
     font-weight: bold;
     border: none;
-    border-radius: 6px;
-    padding: 6px 12px;
+    border-radius: 5px;
+    padding: 4px 10px;
+    font-size: 12px;
 }
 
 #clear-all-btn:hover {
@@ -107,7 +112,7 @@ CSS = b"""
 
 #empty-label {
     color: #6c7086;
-    font-size: 14px;
+    font-size: 13px;
     font-style: italic;
 }
 """
@@ -204,57 +209,56 @@ class HistoryWindow(Gtk.Window):
         row_outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         row_outer.get_style_context().add_class("history-row")
 
-        # Top row: Meta and Delete button
-        top_hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        # Line 1: meta label + action buttons (all inline)
+        top_hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
         row_outer.pack_start(top_hbox, False, False, 0)
 
-        meta_lbl = Gtk.Label(label=f"[{item['timestamp']}]  {item['source'].upper()} → {item['target'].upper()}")
+        meta_lbl = Gtk.Label(label=f"{item['timestamp']}  {item['source'].upper()}→{item['target'].upper()}")
         meta_lbl.get_style_context().add_class("history-meta")
-        top_hbox.pack_start(meta_lbl, False, False, 0)
+        meta_lbl.set_halign(Gtk.Align.START)
+        top_hbox.pack_start(meta_lbl, True, True, 0)
 
-        del_btn = Gtk.Button(label="🗑️")
+        orig_speech_btn = Gtk.Button(label="🔊A")
+        orig_speech_btn.get_style_context().add_class("history-icon-btn")
+        orig_speech_btn.set_tooltip_text("Listen to original")
+        orig_speech_btn.connect("clicked", lambda _: speak(item["original"], item["source"]))
+        top_hbox.pack_end(orig_speech_btn, False, False, 0)
+
+        trans_speech_btn = Gtk.Button(label="🔊B")
+        trans_speech_btn.get_style_context().add_class("history-icon-btn")
+        trans_speech_btn.set_tooltip_text("Listen to translation")
+        trans_speech_btn.connect("clicked", lambda _: speak(item["translated"], item["target"]))
+        top_hbox.pack_end(trans_speech_btn, False, False, 0)
+
+        del_btn = Gtk.Button(label="✕")
         del_btn.get_style_context().add_class("history-delete-btn")
         del_btn.set_tooltip_text("Delete from history")
         del_btn.connect("clicked", self._on_delete, item["id"])
         top_hbox.pack_end(del_btn, False, False, 0)
 
-        # Middle row: Original Text & Speech
-        orig_hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
-        orig_hbox.set_margin_top(6)
-        row_outer.pack_start(orig_hbox, False, False, 0)
+        # Line 2: original → translated inline
+        text_hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        row_outer.pack_start(text_hbox, False, False, 0)
 
         orig_lbl = Gtk.Label(label=item["original"])
         orig_lbl.get_style_context().add_class("history-original")
         orig_lbl.set_halign(Gtk.Align.START)
-        orig_lbl.set_line_wrap(True)
-        orig_lbl.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR)
+        orig_lbl.set_ellipsize(Pango.EllipsizeMode.END)
+        orig_lbl.set_max_width_chars(30)
         orig_lbl.set_selectable(True)
-        orig_hbox.pack_start(orig_lbl, True, True, 0)
+        text_hbox.pack_start(orig_lbl, False, False, 0)
 
-        orig_speech_btn = Gtk.Button(label="🔊 Original")
-        orig_speech_btn.get_style_context().add_class("history-action-btn")
-        orig_speech_btn.set_valign(Gtk.Align.START)
-        orig_speech_btn.connect("clicked", lambda _: speak(item["original"], item["source"]))
-        orig_hbox.pack_end(orig_speech_btn, False, False, 5)
-
-        # Bottom row: Translated Text & Speech
-        trans_hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
-        trans_hbox.set_margin_top(4)
-        row_outer.pack_start(trans_hbox, False, False, 0)
+        arrow_lbl = Gtk.Label(label="→")
+        arrow_lbl.get_style_context().add_class("history-arrow")
+        text_hbox.pack_start(arrow_lbl, False, False, 2)
 
         trans_lbl = Gtk.Label(label=item["translated"])
         trans_lbl.get_style_context().add_class("history-translated")
         trans_lbl.set_halign(Gtk.Align.START)
-        trans_lbl.set_line_wrap(True)
-        trans_lbl.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR)
+        trans_lbl.set_ellipsize(Pango.EllipsizeMode.END)
+        trans_lbl.set_max_width_chars(30)
         trans_lbl.set_selectable(True)
-        trans_hbox.pack_start(trans_lbl, True, True, 0)
-
-        trans_speech_btn = Gtk.Button(label="🔊 Translation")
-        trans_speech_btn.get_style_context().add_class("history-action-btn")
-        trans_speech_btn.set_valign(Gtk.Align.START)
-        trans_speech_btn.connect("clicked", lambda _: speak(item["translated"], item["target"]))
-        trans_hbox.pack_end(trans_speech_btn, False, False, 5)
+        text_hbox.pack_start(trans_lbl, True, True, 0)
 
         return row_outer
 

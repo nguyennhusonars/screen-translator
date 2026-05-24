@@ -18,7 +18,7 @@ Auto-translate highlighted text on Ubuntu. Select any text and see the translati
 
 ```bash
 # Build
-sudo apt install debhelper dpkg-dev   # build dependencies (one-time)
+sudo apt install debhelper dpkg-dev python3-langdetect  # build dependencies (one-time)
 ./build_deb.sh
 
 # Install

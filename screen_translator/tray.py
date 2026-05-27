@@ -109,6 +109,13 @@ class TrayIcon:
         menu.append(title)
         menu.append(Gtk.SeparatorMenuItem())
 
+        # Quick Translate window
+        qt_item = Gtk.MenuItem(label="⚡ Quick Translate")
+        qt_item.connect("activate", lambda _: self._on_quick_translate())
+        menu.append(qt_item)
+
+        menu.append(Gtk.SeparatorMenuItem())
+
         # Auto-translate toggle
         self._auto_item = Gtk.CheckMenuItem(label="Auto-translate selections")
         self._auto_item.set_active(self._config.get("auto_translate", True))
@@ -170,6 +177,15 @@ class TrayIcon:
 
     def _on_autostart_toggled(self, item):
         self._on_toggle_autostart(item.get_active())
+
+    def _on_quick_translate(self):
+        from screen_translator.quick_translate_window import QuickTranslateWindow
+        if not hasattr(self, "_qt_win") or self._qt_win is None:
+            self._qt_win = QuickTranslateWindow(self._config)
+            self._qt_win.connect("destroy", lambda w: setattr(self, "_qt_win", None))
+            self._qt_win.show_all()
+        else:
+            self._qt_win.present()
 
     def _on_view_history(self):
         from screen_translator.history_window import HistoryWindow

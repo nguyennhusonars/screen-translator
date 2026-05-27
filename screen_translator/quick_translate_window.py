@@ -7,7 +7,7 @@ gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
 from gi.repository import Gtk, Gdk, GLib, Pango
 from screen_translator.speech import speak
-from screen_translator.translator import translate
+from screen_translator.translator import translate, get_definitions
 from screen_translator import config
 
 log = logging.getLogger(__name__)
@@ -135,6 +135,23 @@ CSS = b"""
 #qt-footer {
     padding: 8px 14px 12px 14px;
     border-top: 1px solid #313244;
+}
+
+#qt-defs-separator {
+    color: #45475a;
+    font-size: 10px;
+    padding: 4px 0 2px 0;
+}
+
+.qt-pos-label {
+    color: #cba6f7;
+    font-size: 10px;
+    font-weight: bold;
+}
+
+.qt-term-label {
+    color: #89dceb;
+    font-size: 12px;
 }
 """
 
@@ -277,6 +294,10 @@ class QuickTranslateWindow(Gtk.Window):
         self._translated_lbl.set_selectable(True)
         self._result_box.pack_start(self._translated_lbl, False, False, 0)
 
+        # ── Definitions box (shown only for short inputs) ─────────────────────
+        self._defs_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        self._result_box.pack_start(self._defs_box, False, False, 4)
+
         # ── Footer buttons ────────────────────────────────────────────────────
         footer = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         footer.set_name("qt-footer")
@@ -334,12 +355,15 @@ class QuickTranslateWindow(Gtk.Window):
 
         src = self._src_combo.get_active_id() or "auto"
         tgt = self._tgt_combo.get_active_id() or "vi"
+        fetch_defs = len(text) <= 40 and " " not in text.strip() or text.strip().count(" ") <= 2
 
         GLib.idle_add(self._set_loading)
 
         def _work():
             result = translate(text, target_lang=tgt, source_lang=src)
+            defs = get_definitions(text, target_lang=tgt, source_lang=src) if fetch_defs else []
             GLib.idle_add(self._show_result, result)
+            GLib.idle_add(self._show_definitions, defs)
 
         threading.Thread(target=_work, daemon=True).start()
 
@@ -350,6 +374,8 @@ class QuickTranslateWindow(Gtk.Window):
         self._translated_lbl.set_text("")
         self._current_result = None
         self._save_btn.set_sensitive(False)
+        for c in self._defs_box.get_children():
+            self._defs_box.remove(c)
 
     def _show_result(self, result):
         self._loading_lbl.set_text("")
@@ -366,6 +392,42 @@ class QuickTranslateWindow(Gtk.Window):
         self._translated_lbl.set_text(result.get("translated", ""))
         self._save_btn.set_sensitive(True)
         self._save_btn.set_label("💾 Save to Study")
+
+    def _show_definitions(self, defs):
+        """Render dictionary definitions grouped by part of speech."""
+        for c in self._defs_box.get_children():
+            self._defs_box.remove(c)
+
+        if not defs:
+            return
+
+        sep = Gtk.Label(label="── Other meanings ──")
+        sep.set_name("qt-defs-separator")
+        sep.set_halign(Gtk.Align.START)
+        self._defs_box.pack_start(sep, False, False, 0)
+
+        for group in defs:
+            pos = group["pos"]
+            terms = group["terms"]
+
+            row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+
+            pos_lbl = Gtk.Label(label=f"{pos}:")
+            pos_lbl.get_style_context().add_class("qt-pos-label")
+            pos_lbl.set_halign(Gtk.Align.START)
+            pos_lbl.set_width_chars(10)
+            row.pack_start(pos_lbl, False, False, 0)
+
+            terms_lbl = Gtk.Label(label=",  ".join(terms))
+            terms_lbl.get_style_context().add_class("qt-term-label")
+            terms_lbl.set_halign(Gtk.Align.START)
+            terms_lbl.set_line_wrap(True)
+            terms_lbl.set_selectable(True)
+            row.pack_start(terms_lbl, True, True, 0)
+
+            self._defs_box.pack_start(row, False, False, 0)
+
+        self._defs_box.show_all()
 
     def _on_speak_original(self, *_):
         if self._current_result:

@@ -103,3 +103,40 @@ def translate_async(text, target_lang, callback, source_lang="auto"):
         callback(result)
     t = threading.Thread(target=_work, daemon=True)
     t.start()
+
+
+def get_definitions(text, target_lang, source_lang="auto"):
+    """
+    Fetch multiple dictionary meanings from Google Translate API.
+    Returns a list of {"pos": str, "terms": [str]} or [] on failure/no data.
+    Only meaningful for short inputs (single words or short phrases).
+    """
+    try:
+        import urllib.request
+        import json
+        import urllib.parse
+
+        sl = source_lang if source_lang != "auto" else "auto"
+        url = (
+            "https://translate.googleapis.com/translate_a/single"
+            "?client=gtx&dj=1"
+            f"&sl={urllib.parse.quote(sl)}"
+            f"&tl={urllib.parse.quote(target_lang)}"
+            "&dt=bd&dt=t"
+            f"&q={urllib.parse.quote(text)}"
+        )
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read())
+
+        definitions = []
+        for entry in data.get("dict", []):
+            pos = entry.get("pos", "")
+            terms = entry.get("terms", [])[:5]  # Cap at 5 per group
+            if pos and terms:
+                definitions.append({"pos": pos, "terms": terms})
+        return definitions
+    except Exception as e:
+        log.warning("get_definitions failed: %s", e)
+        return []
+

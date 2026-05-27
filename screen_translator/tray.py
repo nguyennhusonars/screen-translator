@@ -189,11 +189,10 @@ class TrayIcon:
 
     def _on_view_history(self):
         from screen_translator.history_window import HistoryWindow
-        # Keep reference so GC doesn't destroy the window
         if not hasattr(self, "_history_win") or self._history_win is None:
             self._history_win = HistoryWindow()
             self._history_win.connect("destroy", lambda w: setattr(self, "_history_win", None))
-            self._history_win.show_all()
+            # show_all() is already called inside HistoryWindow._build_ui()
         else:
             self._history_win.load_items()
             self._history_win.present()

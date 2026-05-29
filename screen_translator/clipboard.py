@@ -21,13 +21,15 @@ class ClipboardMonitor:
         self._pending_id = None
         self._enabled = True
 
-        self._clipboard = Gtk.Clipboard.get(Gdk.SELECTION_PRIMARY)
+        self._primary = Gtk.Clipboard.get(Gdk.SELECTION_PRIMARY)
+        self._clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
 
-        # Method 1: owner-change signal (works on most X11 setups)
+        # Method 1: owner-change signal
+        self._primary.connect("owner-change", self._on_owner_change)
         self._clipboard.connect("owner-change", self._on_owner_change)
-        log.info("Clipboard: owner-change signal connected")
+        log.info("Clipboard: owner-change signals connected")
 
-        # Method 2: polling fallback (works everywhere, catches what signals miss)
+        # Method 2: polling fallback
         self._poll_interval_ms = 1000
         GLib.timeout_add(self._poll_interval_ms, self._poll_clipboard)
         log.info("Clipboard: polling fallback started (%dms)", self._poll_interval_ms)
@@ -36,28 +38,30 @@ class ClipboardMonitor:
         self._enabled = enabled
 
     def _on_owner_change(self, clipboard, event):
-        """Called when PRIMARY selection owner changes (text highlighted)."""
+        """Called when selection owner changes."""
         if not self._enabled:
             return
         log.debug("owner-change signal fired")
-        # Cancel any pending debounce
         if self._pending_id is not None:
             GLib.source_remove(self._pending_id)
             self._pending_id = None
-        # Schedule debounced read
         self._pending_id = GLib.timeout_add(self._delay_ms, self._read_selection)
 
     def _poll_clipboard(self):
-        """Fallback: poll PRIMARY clipboard periodically."""
+        """Fallback: poll clipboards periodically."""
         if self._enabled:
             self._read_selection()
         return True  # Keep polling
 
     def _read_selection(self):
-        """Read current PRIMARY selection text."""
+        """Read current selection text from primary or clipboard."""
         self._pending_id = None
-        text = self._clipboard.wait_for_text()
         
+        # Try primary first (highlighted text), then clipboard (copied text)
+        text = self._primary.wait_for_text()
+        if not text or not text.strip():
+            text = self._clipboard.wait_for_text()
+
         if not text or not text.strip():
             if self._last_text:
                 log.debug("Selection cleared")

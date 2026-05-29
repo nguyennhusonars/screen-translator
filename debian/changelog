@@ -1,3 +1,12 @@
+screen-translator (1.5.7-1) stable; urgency=low
+
+  * Complete rewrite of clipboard monitor for Wayland compatibility
+  * On Wayland: polls wl-paste (wl-clipboard) every 500ms for PRIMARY and CLIPBOARD
+  * On X11: retains GTK owner-change signals + 1s polling fallback
+  * Added wl-clipboard to Recommends in debian/control
+
+ -- sonnn <sonnn@localhost>  Fri, 29 May 2026 16:25:00 +0700
+
 screen-translator (1.5.6-1) stable; urgency=low
 
   * Fixed popup crashing when get_position() returns unexpected value on Wayland

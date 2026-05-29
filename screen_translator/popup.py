@@ -332,30 +332,20 @@ class TranslationPopup(Gtk.Window):
         display = Gdk.Display.get_default()
         seat = display.get_default_seat()
         pointer = seat.get_pointer()
-        
-        # get_position() might return None for screen on Wayland
-        result = pointer.get_position()
-        if result and len(result) == 3:
-            screen, mx, my = result
-        else:
-            mx, my = 0, 0
+        _screen, mx, my = pointer.get_position()
 
-        # On Wayland, display.get_monitor_at_point might fail if coords are bad
         monitor = display.get_monitor_at_point(mx, my)
         if monitor is None:
-            # Fallback to primary monitor
             monitor = display.get_primary_monitor()
-            
-        geom = monitor.get_geometry() if monitor else Gdk.Rectangle()
-        if not monitor:
-            geom.x, geom.y, geom.width, geom.height = 0, 0, 1920, 1080
+        geom = monitor.get_geometry()
 
-        # Realize to calculate size without showing it yet
-        self.realize()
-        _, natural = self.get_preferred_size()
-        pw, ph = natural.width, natural.height
+        # Show first so GTK can calculate the real size
+        self.show_all()
+        self.queue_resize()
+        pw = self.get_allocated_width() or 350
+        ph = self.get_allocated_height() or 120
 
-        # Position: below and right of cursor, shifted if off-screen
+        # Position: below-right of cursor, shift if near screen edges
         x = mx + 15
         y = my + 20
 
@@ -368,11 +358,8 @@ class TranslationPopup(Gtk.Window):
         y = max(geom.y, y)
 
         self.move(x, y)
-        
-        # Force keep above for some compositors
         self.set_keep_above(True)
         self.present()
-        self.show_all()
 
         self._start_monitor()
 

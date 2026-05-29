@@ -1,7 +1,10 @@
 """Main entry point for Screen Translator."""
 
+import os
 import signal
 import logging
+# Force XWayland for window positioning (wl-paste handles clipboard natively)
+os.environ.setdefault("GDK_BACKEND", "x11")
 import gi
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk, GLib

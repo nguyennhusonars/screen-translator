@@ -34,6 +34,7 @@ class ClipboardMonitor:
         self._enabled = True
         self._last_primary = ""
         self._last_clipboard = ""
+        self._last_dispatched = ""   # dedup: don't fire same text twice
         self._stop_event = threading.Event()
 
         if _is_wayland():
@@ -151,6 +152,10 @@ class ClipboardMonitor:
     def _dispatch(self, text):
         if not self._enabled:
             return False
+        if text == self._last_dispatched:
+            log.debug("Duplicate selection ignored: %.40s...", text)
+            return False
+        self._last_dispatched = text
         if self._min_length <= len(text) <= self._max_length:
             log.info("New selection (%d chars): %.50s...", len(text), text)
             self._on_selection(text)

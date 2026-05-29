@@ -1,3 +1,13 @@
+screen-translator (1.5.8-1) stable; urgency=low
+
+  * Hybrid Wayland fix: use GDK_BACKEND=x11 (XWayland) for window positioning
+    while keeping wl-paste for clipboard detection — best of both approaches
+  * Fixed popup always showing at same location (Wayland POPUP windows need parent)
+  * Fixed double-translation trigger when primary and clipboard both fire same text
+  * Simplified popup positioning: show_all() before measuring allocated size
+
+ -- sonnn <sonnn@localhost>  Fri, 29 May 2026 17:44:00 +0700
+
 screen-translator (1.5.7-1) stable; urgency=low
 
   * Complete rewrite of clipboard monitor for Wayland compatibility

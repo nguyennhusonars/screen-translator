@@ -17,7 +17,8 @@ class ClipboardMonitor:
         self._delay_ms = delay_ms
         self._min_length = min_length
         self._max_length = max_length
-        self._last_text = ""
+        self._last_primary = ""
+        self._last_clipboard = ""
         self._pending_id = None
         self._enabled = True
 
@@ -54,30 +55,39 @@ class ClipboardMonitor:
         return True  # Keep polling
 
     def _read_selection(self):
-        """Read current selection text from primary or clipboard."""
+        """Read current selection text from primary and clipboard."""
         self._pending_id = None
         
-        # Try primary first (highlighted text), then clipboard (copied text)
-        text = self._primary.wait_for_text()
-        if not text or not text.strip():
-            text = self._clipboard.wait_for_text()
+        # Read both buffers
+        primary_text = self._primary.wait_for_text() or ""
+        clipboard_text = self._clipboard.wait_for_text() or ""
+        
+        primary_text = primary_text.strip()
+        clipboard_text = clipboard_text.strip()
 
-        if not text or not text.strip():
-            if self._last_text:
+        # Check which one actually changed compared to its own last state
+        new_text = None
+        
+        if primary_text and primary_text != self._last_primary:
+            new_text = primary_text
+            self._last_primary = primary_text
+        elif clipboard_text and clipboard_text != self._last_clipboard:
+            new_text = clipboard_text
+            self._last_clipboard = clipboard_text
+            
+        if not new_text:
+            # If both are empty and we had something before
+            if not primary_text and not clipboard_text and (self._last_primary or self._last_clipboard):
                 log.debug("Selection cleared")
-                self._last_text = ""
+                self._last_primary = ""
+                self._last_clipboard = ""
                 self._on_selection(None)
             return False
 
-        text = text.strip()
-        if text != self._last_text:
-            if self._min_length <= len(text) <= self._max_length:
-                log.info("New selection (%d chars): %.50s...", len(text), text)
-                self._last_text = text
-                self._on_selection(text)
-            else:
-                # Text changed but doesn't meet length requirements
-                self._last_text = text
-                self._on_selection(None)
-                
+        if self._min_length <= len(new_text) <= self._max_length:
+            log.info("New selection (%d chars): %.50s...", len(new_text), new_text)
+            self._on_selection(new_text)
+        else:
+            self._on_selection(None)
+
         return False  # Don't repeat (for debounced calls)

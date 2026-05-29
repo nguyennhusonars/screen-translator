@@ -1,8 +1,5 @@
 """Main entry point for Screen Translator."""
 
-import os
-os.environ["GDK_BACKEND"] = "x11"
-
 import signal
 import logging
 import gi
@@ -32,7 +29,7 @@ class ScreenTranslator:
                  self._config["target_language"],
                  self._config["auto_translate"])
 
-        self._popup = TranslationPopup()
+        self._popup = None
         self._tray = TrayIcon(
             self._config,
             on_toggle_auto=self._on_toggle_auto,
@@ -42,23 +39,29 @@ class ScreenTranslator:
             on_quit=self._quit,
         )
         self._clipboard = ClipboardMonitor(self._on_text_selected)
-        self._translator_thread = None
         log.info("Screen Translator started. Waiting for text selections...")
+
+    def _get_new_popup(self):
+        if self._popup is not None:
+            self._popup.dismiss()
+            self._popup.destroy()
+        self._popup = TranslationPopup()
+        return self._popup
 
     def _on_text_selected(self, text):
         """Called when user highlights text."""
         if text is None:
-            GLib.idle_add(self._popup.dismiss)
+            if self._popup:
+                GLib.idle_add(self._popup.dismiss)
             return
 
         if not self._config.get("auto_translate", True):
             return
 
         log.info("Translating: %.60s...", text)
-        # Show loading popup
-        GLib.idle_add(self._popup.show_loading)
+        popup = self._get_new_popup()
+        GLib.idle_add(popup.show_loading)
 
-        # Translate in background
         source = self._config.get("source_language", "auto")
         target = self._config.get("target_language", "vi")
         translate_async(
@@ -76,9 +79,10 @@ class ScreenTranslator:
             log.info("Translated: %.60s...", result.get("translated", ""))
 
         def _show():
-            self._popup.show_result(result)
-            timeout = self._config.get("popup_timeout", 8)
-            self._popup.set_auto_dismiss(timeout)
+            if self._popup:
+                self._popup.show_result(result)
+                timeout = self._config.get("popup_timeout", 8)
+                self._popup.set_auto_dismiss(timeout)
         GLib.idle_add(_show)
 
     def _on_toggle_autostart(self, enabled):
@@ -90,7 +94,7 @@ class ScreenTranslator:
         self._clipboard.set_enabled(enabled)
         config.save(self._config)
         log.info("Auto-translate: %s", enabled)
-        if not enabled:
+        if not enabled and self._popup:
             self._popup.dismiss()
 
     def _on_change_source(self, lang_code):

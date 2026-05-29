@@ -1,3 +1,11 @@
+screen-translator (1.5.5-1) stable; urgency=low
+
+  * Reverted forcing X11 backend as it breaks native Wayland mouse tracking
+  * Fixed popup immediately dismissing due to long mouse drags holding BUTTON1
+  * Circumvented GTK Wayland bug on secondary monitors by recreating the popup for each translation
+
+ -- sonnn <sonnn@localhost>  Fri, 29 May 2026 09:48:00 +0700
+
 screen-translator (1.5.4-1) stable; urgency=low
 
   * Forced GDK_BACKEND=x11 to restore global mouse coordinates and window positioning on Wayland

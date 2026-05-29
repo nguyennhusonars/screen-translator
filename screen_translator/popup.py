@@ -368,6 +368,7 @@ class TranslationPopup(Gtk.Window):
 
     def _start_monitor(self):
         if self._monitor_id is None:
+            self._was_button_pressed = True  # Prevent immediate dismiss
             self._monitor_id = GLib.timeout_add(100, self._monitor_mouse)
 
     def _stop_monitor(self):
@@ -386,11 +387,11 @@ class TranslationPopup(Gtk.Window):
         pointer = seat.get_pointer()
         root = Gdk.get_default_root_window()
 
-        # Check button state globally using the root window
         _, _, _, mask = root.get_device_position(pointer)
+        is_pressed = bool(mask & Gdk.ModifierType.BUTTON1_MASK)
         
-        if mask & Gdk.ModifierType.BUTTON1_MASK:
-            # Check if pointer is outside our window
+        if is_pressed and not self._was_button_pressed:
+            # Fresh click
             x, y = self.get_position()
             w, h = self.get_size()
             _, mx, my = pointer.get_position()
@@ -398,6 +399,8 @@ class TranslationPopup(Gtk.Window):
             if not (x <= mx <= x + w and y <= my <= y + h):
                 log.debug("Global click detected outside popup at %d, %d. Dismissing.", mx, my)
                 self.dismiss()
+                self._was_button_pressed = is_pressed
                 return False
 
+        self._was_button_pressed = is_pressed
         return True

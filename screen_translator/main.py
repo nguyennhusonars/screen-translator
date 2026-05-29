@@ -1,5 +1,8 @@
 """Main entry point for Screen Translator."""
 
+import os
+os.environ["GDK_BACKEND"] = "x11"
+
 import signal
 import logging
 import gi

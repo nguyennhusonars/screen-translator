@@ -1,3 +1,10 @@
+screen-translator (1.5.4-1) stable; urgency=low
+
+  * Forced GDK_BACKEND=x11 to restore global mouse coordinates and window positioning on Wayland
+  * Fixed popup window failing to appear on secondary monitors under Wayland sessions
+
+ -- sonnn <sonnn@localhost>  Fri, 29 May 2026 09:44:00 +0700
+
 screen-translator (1.5.3-1) stable; urgency=low
 
   * Fixed popup window positioning on multi-monitor setups

@@ -332,13 +332,23 @@ class TranslationPopup(Gtk.Window):
         display = Gdk.Display.get_default()
         seat = display.get_default_seat()
         pointer = seat.get_pointer()
-        screen, mx, my = pointer.get_position()
         
-        # Ensure window is on the correct screen
-        self.set_screen(screen)
+        # get_position() might return None for screen on Wayland
+        result = pointer.get_position()
+        if result and len(result) == 3:
+            screen, mx, my = result
+        else:
+            mx, my = 0, 0
 
+        # On Wayland, display.get_monitor_at_point might fail if coords are bad
         monitor = display.get_monitor_at_point(mx, my)
-        geom = monitor.get_geometry()
+        if monitor is None:
+            # Fallback to primary monitor
+            monitor = display.get_primary_monitor()
+            
+        geom = monitor.get_geometry() if monitor else Gdk.Rectangle()
+        if not monitor:
+            geom.x, geom.y, geom.width, geom.height = 0, 0, 1920, 1080
 
         # Realize to calculate size without showing it yet
         self.realize()

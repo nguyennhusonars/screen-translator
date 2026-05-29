@@ -333,12 +333,15 @@ class TranslationPopup(Gtk.Window):
         seat = display.get_default_seat()
         pointer = seat.get_pointer()
         screen, mx, my = pointer.get_position()
+        
+        # Ensure window is on the correct screen
+        self.set_screen(screen)
 
         monitor = display.get_monitor_at_point(mx, my)
         geom = monitor.get_geometry()
 
-        # Get popup size
-        self.show_all()
+        # Realize to calculate size without showing it yet
+        self.realize()
         _, natural = self.get_preferred_size()
         pw, ph = natural.width, natural.height
 
@@ -355,6 +358,12 @@ class TranslationPopup(Gtk.Window):
         y = max(geom.y, y)
 
         self.move(x, y)
+        
+        # Force keep above for some compositors
+        self.set_keep_above(True)
+        self.present()
+        self.show_all()
+
         self._start_monitor()
 
     def _start_monitor(self):

@@ -1,3 +1,10 @@
+screen-translator (1.5.3-1) stable; urgency=low
+
+  * Fixed popup window positioning on multi-monitor setups
+  * Improved popup window layering to stay on top of fullscreen applications
+
+ -- sonnn <sonnn@localhost>  Fri, 29 May 2026 09:39:00 +0700
+
 screen-translator (1.5.2-1) stable; urgency=low
 
   * Fixed a bug where Wayland clipboard polling could fail if the primary selection was untouched

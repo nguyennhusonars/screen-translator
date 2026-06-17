@@ -1,4 +1,4 @@
 """Screen Translator - Auto-translate highlighted text on Ubuntu."""
 
-__version__ = "2.0.1"
+__version__ = "2.0.2"
 __app_id__ = "com.github.screen-translator"

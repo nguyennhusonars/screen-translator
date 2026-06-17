@@ -1,3 +1,13 @@
+screen-translator (2.0.2-1) stable; urgency=low
+
+  * Removed wl-paste entirely! GNOME Wayland lacks --watch support.
+  * Reverted to pure, passive GTK clipboard monitoring.
+  * XWayland (GDK_BACKEND=x11) perfectly synchronizes the clipboard
+    from Wayland to GTK, so native GTK owner-change signals work
+    flawlessly without any polling, subprocesses, or lag.
+
+ -- sonnn <sonnn@localhost>  Wed, 17 Jun 2026 17:10:00 +0700
+
 screen-translator (2.0.1-1) stable; urgency=low
 
   * Replaced wl-paste polling with wl-paste --watch to fix system lag

@@ -15,7 +15,6 @@ Depends: python3 (>= 3.8),
          mpv,
          python3-langdetect,
          ${misc:Depends}
-Recommends: wl-clipboard
 Description: Auto-translate highlighted text on Ubuntu
  Screen Translator monitors your text selections and automatically
  translates them to your target language, showing results in a

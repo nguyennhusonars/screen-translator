@@ -1,3 +1,11 @@
+screen-translator (2.0.1-1) stable; urgency=low
+
+  * Replaced wl-paste polling with wl-paste --watch to fix system lag
+  * Fixed popup icon blinking in dock caused by continuous process spawning
+  * Restored fully passive, event-driven clipboard monitoring on Wayland
+
+ -- sonnn <sonnn@localhost>  Wed, 17 Jun 2026 16:28:00 +0700
+
 screen-translator (2.0.0-1) stable; urgency=medium
 
   * Major popup refactor — eliminates window-stack thrash that caused other

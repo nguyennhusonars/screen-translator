@@ -1,4 +1,11 @@
-"""Translation popup window that appears near the mouse cursor."""
+"""Translation popup window that appears near the mouse cursor.
+
+Designed to avoid perturbing the focus stack of other apps:
+  - WindowTypeHint.NOTIFICATION (Mutter/GNOME treats it as system overlay)
+  - accept_focus=False, focus_on_map=False, skip_taskbar, skip_pager
+  - No present()/keep_above per show — widget tree is built once and reused
+  - Outside-click handled via passive Gdk.Seat grab (no polling)
+"""
 
 import logging
 import gi
@@ -70,93 +77,90 @@ CSS = b"""
     padding: 12px 14px;
 }
 
-#copy-button {
+#copy-button, #save-button, #speech-button {
     background-color: #45475a;
     color: #cdd6f4;
     border: none;
     border-radius: 6px;
     padding: 4px 10px;
-    margin: 0 6px 0 0;
     font-size: 11px;
     min-width: 0;
     min-height: 0;
 }
 
-#copy-button:hover {
-    background-color: #585b70;
-}
+#copy-button { margin: 0 6px 0 0; }
+#save-button { margin: 0; }
+#speech-button { margin: 0 0 10px 5px; }
 
-#save-button {
-    background-color: #45475a;
-    color: #cdd6f4;
-    border: none;
-    border-radius: 6px;
-    padding: 4px 10px;
-    margin: 0;
-    font-size: 11px;
-    min-width: 0;
-    min-height: 0;
-}
-
-#save-button:hover {
-    background-color: #a6e3a1;
-    color: #1e1e2e;
-}
-
-#speech-button {
-    background-color: #45475a;
-    color: #cdd6f4;
-    border: none;
-    border-radius: 6px;
-    padding: 4px 10px;
-    margin: 0 0 10px 5px;
-    font-size: 11px;
-    min-width: 0;
-    min-height: 0;
-}
-
-#speech-button:hover {
-    background-color: #fab387;
-    color: #1e1e2e;
-}
+#copy-button:hover { background-color: #585b70; }
+#save-button:hover { background-color: #a6e3a1; color: #1e1e2e; }
+#speech-button:hover { background-color: #fab387; color: #1e1e2e; }
 """
+
+_css_loaded = False
+
+
+def _ensure_css():
+    global _css_loaded
+    if _css_loaded:
+        return
+    provider = Gtk.CssProvider()
+    provider.load_from_data(CSS)
+    Gtk.StyleContext.add_provider_for_screen(
+        Gdk.Screen.get_default(),
+        provider,
+        Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
+    )
+    _css_loaded = True
 
 
 class TranslationPopup(Gtk.Window):
-    """Borderless popup showing translated text near mouse cursor."""
+    """Borderless popup showing translated text near the mouse cursor.
+
+    Built once and reused across translations. Content swaps in place;
+    the window is only mapped/unmapped via show()/hide() — never re-presented.
+    """
 
     def __init__(self):
         super().__init__(type=Gtk.WindowType.POPUP)
+        _ensure_css()
+
         self.set_name("translator-popup")
-        self.set_type_hint(Gdk.WindowTypeHint.TOOLTIP)
+        # NOTIFICATION hint: Mutter/GNOME treats this as a system overlay
+        # that should not perturb focus or appear in the dock.
+        self.set_type_hint(Gdk.WindowTypeHint.NOTIFICATION)
         self.set_keep_above(True)
         self.set_accept_focus(False)
+        self.set_focus_on_map(False)
+        self.set_skip_taskbar_hint(True)
+        self.set_skip_pager_hint(True)
         self.set_decorated(False)
         self.set_resizable(False)
         self.set_default_size(350, -1)
         self.set_size_request(200, -1)
 
         self._timeout_id = None
+        self._original_text = ""
         self._translated_text = ""
-        self._monitor_id = None
+        self._source_lang = "auto"
+        self._target_lang = "en"
+        self._grabbed_seat = None
 
-        # Apply CSS
-        style_provider = Gtk.CssProvider()
-        style_provider.load_from_data(CSS)
-        Gtk.StyleContext.add_provider_for_screen(
-            Gdk.Screen.get_default(),
-            style_provider,
-            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
-        )
+        self._build_widgets()
 
-        # Main container
-        self._box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        self.add(self._box)
+        # Click on the popup itself dismisses it.
+        self.connect("button-press-event", lambda *_: self.dismiss())
 
-        # Header bar
+    # ─── Widget tree (built once) ─────────────────────────────────────────────
+
+    def _build_widgets(self):
+        outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self.add(outer)
+
+        # Header
         header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         header.set_name("popup-header")
-        self._header_label = Gtk.Label(label="Translating...")
+        self._header_label = Gtk.Label(label="Screen Translator")
         self._header_label.set_name("header-label")
         self._header_label.set_halign(Gtk.Align.START)
         header.pack_start(self._header_label, True, True, 0)
@@ -165,141 +169,148 @@ class TranslationPopup(Gtk.Window):
         close_btn.set_name("close-button")
         close_btn.connect("clicked", lambda _: self.dismiss())
         header.pack_end(close_btn, False, False, 0)
-        self._box.pack_start(header, False, False, 0)
+        outer.pack_start(header, False, False, 0)
 
-        # Content area
-        self._content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        self._box.pack_start(self._content, True, True, 0)
+        # Stack: loading | error | result
+        self._stack = Gtk.Stack()
+        self._stack.set_transition_type(Gtk.StackTransitionType.NONE)
+        outer.pack_start(self._stack, True, True, 0)
 
-        # Click outside to dismiss (when clicking the popup itself)
-        self.connect("button-press-event", lambda w, e: self.dismiss())
+        # Loading page
+        loading = Gtk.Label(label="Translating...")
+        loading.set_name("loading-text")
+        loading.set_halign(Gtk.Align.START)
+        self._stack.add_named(loading, "loading")
+
+        # Error page
+        self._error_label = Gtk.Label()
+        self._error_label.set_name("error-text")
+        self._error_label.set_halign(Gtk.Align.START)
+        self._error_label.set_line_wrap(True)
+        self._error_label.set_max_width_chars(45)
+        self._stack.add_named(self._error_label, "error")
+
+        # Result page
+        result_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+
+        orig_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        orig_row.set_margin_start(14)
+        orig_row.set_margin_end(14)
+        orig_row.set_margin_top(8)
+        orig_row.set_margin_bottom(4)
+        self._orig_label = Gtk.Label()
+        self._orig_label.set_name("original-text")
+        self._orig_label.set_halign(Gtk.Align.START)
+        self._orig_label.set_line_wrap(True)
+        self._orig_label.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR)
+        self._orig_label.set_max_width_chars(40)
+        self._orig_label.set_selectable(True)
+        orig_row.pack_start(self._orig_label, True, True, 0)
+        orig_speech = Gtk.Button(label="🔊")
+        orig_speech.set_name("speech-button")
+        orig_speech.set_tooltip_text("Listen to original")
+        orig_speech.set_valign(Gtk.Align.START)
+        orig_speech.connect("clicked", lambda _: speak(self._original_text, self._source_lang))
+        orig_row.pack_start(orig_speech, False, False, 0)
+        result_box.pack_start(orig_row, False, False, 0)
+
+        trans_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        trans_row.set_margin_start(14)
+        trans_row.set_margin_end(14)
+        trans_row.set_margin_top(4)
+        trans_row.set_margin_bottom(10)
+        self._trans_label = Gtk.Label()
+        self._trans_label.set_name("translated-text")
+        self._trans_label.set_halign(Gtk.Align.START)
+        self._trans_label.set_line_wrap(True)
+        self._trans_label.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR)
+        self._trans_label.set_max_width_chars(40)
+        self._trans_label.set_selectable(True)
+        trans_row.pack_start(self._trans_label, True, True, 0)
+        trans_speech = Gtk.Button(label="🔊")
+        trans_speech.set_name("speech-button")
+        trans_speech.set_tooltip_text("Listen to translation")
+        trans_speech.set_valign(Gtk.Align.START)
+        trans_speech.connect("clicked", lambda _: speak(self._translated_text, self._target_lang))
+        trans_row.pack_start(trans_speech, False, False, 0)
+        result_box.pack_start(trans_row, False, False, 0)
+
+        actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        actions.set_margin_start(14)
+        actions.set_margin_bottom(10)
+        self._copy_btn = Gtk.Button(label="📋 Copy Translation")
+        self._copy_btn.set_name("copy-button")
+        self._copy_btn.connect("clicked", self._on_copy)
+        actions.pack_start(self._copy_btn, False, False, 0)
+        self._save_btn = Gtk.Button(label="💾 Save to Study")
+        self._save_btn.set_name("save-button")
+        self._save_btn.connect("clicked", self._on_save)
+        actions.pack_start(self._save_btn, False, False, 0)
+        result_box.pack_start(actions, False, False, 0)
+
+        self._stack.add_named(result_box, "result")
+
+        outer.show_all()
+
+    # ─── Public API ───────────────────────────────────────────────────────────
 
     def show_loading(self):
-        """Show loading state at mouse position."""
-        self._clear_content()
-        lbl = Gtk.Label(label="Translating...")
-        lbl.set_name("loading-text")
-        lbl.set_halign(Gtk.Align.START)
-        self._content.pack_start(lbl, False, False, 0)
-        self._header_label.set_text("Screen Translator")
-        self._position_and_show()
+        """Show loading state at the current mouse position."""
+        self._header_label.set_text("Translating...")
+        self._stack.set_visible_child_name("loading")
+        self._copy_btn.set_label("📋 Copy Translation")
+        self._save_btn.set_label("💾 Save to Study")
+        self._save_btn.set_sensitive(True)
+        self._show_at_cursor()
 
     def show_result(self, result):
-        """Show translation result. Called from any thread via GLib.idle_add."""
-        self._clear_content()
-
+        """Render a translation result (or error)."""
         if result is None:
             self.dismiss()
             return
 
         if result.get("error"):
-            lbl = Gtk.Label(label=f"Error: {result['error']}")
-            lbl.set_name("error-text")
-            lbl.set_halign(Gtk.Align.START)
-            lbl.set_line_wrap(True)
-            lbl.set_max_width_chars(45)
-            self._content.pack_start(lbl, False, False, 0)
+            self._error_label.set_text(f"Error: {result['error']}")
             self._header_label.set_text("Translation Error")
-        else:
-            src = result.get("source", "auto")
-            tgt = result.get("target", "?")
-            self._header_label.set_text(f"{src} → {tgt}")
+            self._stack.set_visible_child_name("error")
+            return
 
-            # Original text section
-            orig_hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
-            orig_hbox.set_margin_start(14)
-            orig_hbox.set_margin_end(14)
-            orig_hbox.set_margin_top(8)
-            orig_hbox.set_margin_bottom(4)
-            self._content.pack_start(orig_hbox, False, False, 0)
+        self._original_text = result.get("original", "")
+        self._translated_text = result.get("translated", "")
+        self._source_lang = result.get("source", "auto")
+        self._target_lang = result.get("target", "en")
 
-            orig = result["original"]
-            self._original_text = orig
-            self._source_lang = result.get("source", "auto")
-            self._target_lang = result.get("target", "en")
-
-            if len(orig) > 150:
-                orig = orig[:147] + "..."
-            orig_lbl = Gtk.Label(label=orig)
-            orig_lbl.set_name("original-text")
-            orig_lbl.set_halign(Gtk.Align.START)
-            orig_lbl.set_line_wrap(True)
-            orig_lbl.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR)
-            orig_lbl.set_max_width_chars(40)
-            orig_lbl.set_selectable(True)
-            orig_hbox.pack_start(orig_lbl, True, True, 0)
-
-            src_speech_btn = Gtk.Button(label="🔊")
-            src_speech_btn.set_name("speech-button")
-            src_speech_btn.set_tooltip_text("Listen to original")
-            src_speech_btn.set_valign(Gtk.Align.START)
-            src_speech_btn.connect("clicked", lambda _: speak(result["original"], result.get("source", "en")))
-            orig_hbox.pack_start(src_speech_btn, False, False, 0)
-
-            # Translated text section
-            trans_hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
-            trans_hbox.set_margin_start(14)
-            trans_hbox.set_margin_end(14)
-            trans_hbox.set_margin_top(4)
-            trans_hbox.set_margin_bottom(10)
-            self._content.pack_start(trans_hbox, False, False, 0)
-
-            self._translated_text = result.get("translated", "")
-            trans_lbl = Gtk.Label(label=self._translated_text)
-            trans_lbl.set_name("translated-text")
-            trans_lbl.set_halign(Gtk.Align.START)
-            trans_lbl.set_line_wrap(True)
-            trans_lbl.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR)
-            trans_lbl.set_max_width_chars(40)
-            trans_lbl.set_selectable(True)
-            trans_hbox.pack_start(trans_lbl, True, True, 0)
-
-            tgt_speech_btn = Gtk.Button(label="🔊")
-            tgt_speech_btn.set_name("speech-button")
-            tgt_speech_btn.set_tooltip_text("Listen to translation")
-            tgt_speech_btn.set_valign(Gtk.Align.START)
-            tgt_speech_btn.connect("clicked", lambda _: speak(self._translated_text, result.get("target", "en")))
-            trans_hbox.pack_start(tgt_speech_btn, False, False, 0)
-
-            # Footer Action buttons
-            actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
-            actions.set_margin_start(14)
-            actions.set_margin_bottom(10)
-            self._content.pack_start(actions, False, False, 0)
-
-            copy_btn = Gtk.Button(label="📋 Copy Translation")
-            copy_btn.set_name("copy-button")
-            copy_btn.connect("clicked", self._on_copy)
-            actions.pack_start(copy_btn, False, False, 0)
-
-            save_btn = Gtk.Button(label="💾 Save to Study")
-            save_btn.set_name("save-button")
-            save_btn.connect("clicked", self._on_save)
-            actions.pack_start(save_btn, False, False, 0)
-
-        self._position_and_show()
-
-    def show_result_threadsafe(self, result):
-        """Thread-safe wrapper to show result from background thread."""
-        GLib.idle_add(self.show_result, result)
+        self._header_label.set_text(f"{self._source_lang} → {self._target_lang}")
+        display_orig = self._original_text
+        if len(display_orig) > 150:
+            display_orig = display_orig[:147] + "..."
+        self._orig_label.set_text(display_orig)
+        self._trans_label.set_text(self._translated_text)
+        self._copy_btn.set_label("📋 Copy Translation")
+        self._save_btn.set_label("💾 Save to Study")
+        self._save_btn.set_sensitive(True)
+        self._stack.set_visible_child_name("result")
 
     def dismiss(self):
         """Hide the popup."""
-        self._stop_monitor()
-        if self._timeout_id is not None:
-            GLib.source_remove(self._timeout_id)
-            self._timeout_id = None
+        self._cancel_timeout()
+        self._release_grab()
         self.hide()
 
     def set_auto_dismiss(self, seconds):
         """Auto-dismiss after N seconds. 0 = never."""
+        self._cancel_timeout()
+        if seconds > 0:
+            self._timeout_id = GLib.timeout_add_seconds(seconds, self._on_timeout)
+
+    # ─── Internal ─────────────────────────────────────────────────────────────
+
+    def _cancel_timeout(self):
         if self._timeout_id is not None:
             GLib.source_remove(self._timeout_id)
             self._timeout_id = None
-        if seconds > 0:
-            self._timeout_id = GLib.timeout_add_seconds(seconds, self._auto_dismiss)
 
-    def _auto_dismiss(self):
+    def _on_timeout(self):
         self._timeout_id = None
         self.dismiss()
         return False
@@ -316,88 +327,76 @@ class TranslationPopup(Gtk.Window):
             self._original_text,
             self._translated_text,
             self._source_lang,
-            self._target_lang
+            self._target_lang,
         )
         if success:
             button.set_label("✓ Saved")
             button.set_sensitive(False)
 
-    def _clear_content(self):
-        for child in self._content.get_children():
-            self._content.remove(child)
-            child.destroy()
+    def _show_at_cursor(self):
+        """Show or refresh popup near mouse cursor. No present()/raise."""
+        if self.get_visible():
+            # Already visible — just let the new content take effect.
+            self.queue_resize()
+            return
 
-    def _position_and_show(self):
-        """Position popup near mouse cursor, keeping on screen."""
         display = Gdk.Display.get_default()
         seat = display.get_default_seat()
         pointer = seat.get_pointer()
         _screen, mx, my = pointer.get_position()
 
-        monitor = display.get_monitor_at_point(mx, my)
-        if monitor is None:
-            monitor = display.get_primary_monitor()
+        monitor = display.get_monitor_at_point(mx, my) or display.get_primary_monitor()
         geom = monitor.get_geometry()
 
-        # Show first so GTK can calculate the real size
         self.show_all()
         self.queue_resize()
         pw = self.get_allocated_width() or 350
         ph = self.get_allocated_height() or 120
 
-        # Position: below-right of cursor, shift if near screen edges
         x = mx + 15
         y = my + 20
-
         if x + pw > geom.x + geom.width:
             x = mx - pw - 10
         if y + ph > geom.y + geom.height:
             y = my - ph - 10
-
         x = max(geom.x, x)
         y = max(geom.y, y)
 
         self.move(x, y)
-        self.set_keep_above(True)
-        self.present()
+        self._install_grab()
 
-        self._start_monitor()
+    def _install_grab(self):
+        """Passive seat grab: catches outside clicks without 100ms polling.
 
-    def _start_monitor(self):
-        if self._monitor_id is None:
-            self._was_button_pressed = True  # Prevent immediate dismiss
-            self._monitor_id = GLib.timeout_add(100, self._monitor_mouse)
-
-    def _stop_monitor(self):
-        if self._monitor_id is not None:
-            GLib.source_remove(self._monitor_id)
-            self._monitor_id = None
-
-    def _monitor_mouse(self):
-        """Check if mouse button is pressed outside the popup."""
-        if not self.get_visible():
-            self._monitor_id = None
-            return False
-
+        BUTTON_PRESS_MASK alone — owner_events=True so events on our window
+        deliver normally and we only see foreign button presses to dismiss.
+        """
+        gdk_win = self.get_window()
+        if gdk_win is None:
+            return
         display = Gdk.Display.get_default()
         seat = display.get_default_seat()
-        pointer = seat.get_pointer()
-        root = Gdk.get_default_root_window()
+        capabilities = Gdk.SeatCapabilities.POINTER
+        status = seat.grab(
+            gdk_win,
+            capabilities,
+            True,        # owner_events: our widgets still get normal events
+            None,        # cursor
+            None,        # event
+            None,        # prepare_func
+        )
+        if status == Gdk.GrabStatus.SUCCESS:
+            self._grabbed_seat = seat
+            # Listen for foreign button presses on the root via the grabbed seat.
+            self.add_events(Gdk.EventMask.BUTTON_PRESS_MASK)
+        else:
+            log.debug("Seat grab failed (%s); outside-click dismiss disabled this round.", status)
+            self._grabbed_seat = None
 
-        _, _, _, mask = root.get_device_position(pointer)
-        is_pressed = bool(mask & Gdk.ModifierType.BUTTON1_MASK)
-        
-        if is_pressed and not self._was_button_pressed:
-            # Fresh click
-            x, y = self.get_position()
-            w, h = self.get_size()
-            _, mx, my = pointer.get_position()
-
-            if not (x <= mx <= x + w and y <= my <= y + h):
-                log.debug("Global click detected outside popup at %d, %d. Dismissing.", mx, my)
-                self.dismiss()
-                self._was_button_pressed = is_pressed
-                return False
-
-        self._was_button_pressed = is_pressed
-        return True
+    def _release_grab(self):
+        if self._grabbed_seat is not None:
+            try:
+                self._grabbed_seat.ungrab()
+            except Exception:
+                pass
+            self._grabbed_seat = None

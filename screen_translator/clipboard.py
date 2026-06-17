@@ -10,7 +10,6 @@ import os
 import logging
 import subprocess
 import threading
-import time
 import gi
 gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
@@ -28,7 +27,7 @@ class ClipboardMonitor:
 
     def __init__(self, on_selection, delay_ms=600, min_length=2, max_length=5000):
         self._on_selection = on_selection
-        self._delay_ms = delay_ms / 1000.0  # convert to seconds for sleep
+        self._settle_seconds = delay_ms / 1000.0
         self._min_length = min_length
         self._max_length = max_length
         self._enabled = True
@@ -36,6 +35,7 @@ class ClipboardMonitor:
         self._last_clipboard = ""
         self._last_dispatched = ""   # dedup: don't fire same text twice
         self._stop_event = threading.Event()
+        self._threads = []
 
         if _is_wayland():
             self._start_wayland()
@@ -45,11 +45,15 @@ class ClipboardMonitor:
     def set_enabled(self, enabled):
         self._enabled = enabled
 
+    def stop(self):
+        """Signal background threads to exit. Safe to call at app shutdown."""
+        self._stop_event.set()
+
     # ─── Wayland backend ───────────────────────────────────────────────────────
 
     def _start_wayland(self):
-        """Spawn two poll threads: one for PRIMARY, one for CLIPBOARD."""
-        log.info("Wayland detected — using wl-paste polling.")
+        """Spawn two watch threads: one for PRIMARY, one for CLIPBOARD."""
+        log.info("Wayland detected — using wl-paste --watch.")
 
         # Verify wl-paste exists
         try:
@@ -69,11 +73,12 @@ class ClipboardMonitor:
 
         for source, extra_args in [("primary", ["--primary"]), ("clipboard", [])]:
             t = threading.Thread(
-                target=self._wl_poll_loop,
+                target=self._wl_watch_loop,
                 args=(source, extra_args),
                 daemon=True,
             )
             t.start()
+            self._threads.append(t)
 
     def _wl_paste(self, extra_args):
         """Run wl-paste and return text, or empty string on failure."""
@@ -90,20 +95,48 @@ class ClipboardMonitor:
             pass
         return ""
 
-    def _wl_poll_loop(self, source, extra_args):
-        """Background thread: poll wl-paste every 500 ms."""
-        log.info("wl-paste poll thread started for %s", source)
-        poll_interval = 0.5
+    def _wl_watch_loop(self, source, extra_args):
+        """Background thread: wait for wl-paste --watch events."""
+        log.info("wl-paste watch thread started for %s", source)
+        
+        # wl-paste --watch runs the given command every time the clipboard changes.
+        # We just echo "CHANGED" and read stdout to detect when to poll.
+        cmd = ["wl-paste", "--watch", "echo", "CHANGED"] + extra_args
+        try:
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True,
+                bufsize=1, # Line buffered
+            )
+        except Exception as e:
+            log.error("Failed to start wl-paste --watch: %s", e)
+            return
+
         while not self._stop_event.is_set():
-            if self._enabled:
-                text = self._wl_paste(extra_args).strip()
-                if source == "primary" and text and text != self._last_primary:
+            line = proc.stdout.readline()
+            if not line:
+                break  # Process died
+                
+            if not self._enabled:
+                continue
+                
+            # A change occurred! Wait a moment for selection to settle.
+            if self._stop_event.wait(self._settle_seconds):
+                break
+                
+            text = self._wl_paste(extra_args).strip()
+            last = self._last_primary if source == "primary" else self._last_clipboard
+            
+            if text and text != last:
+                if source == "primary":
                     self._last_primary = text
-                    GLib.idle_add(self._dispatch, text)
-                elif source == "clipboard" and text and text != self._last_clipboard:
+                else:
                     self._last_clipboard = text
-                    GLib.idle_add(self._dispatch, text)
-            time.sleep(poll_interval)
+                GLib.idle_add(self._dispatch, text)
+
+        proc.terminate()
 
     # ─── X11 / GTK backend ────────────────────────────────────────────────────
 

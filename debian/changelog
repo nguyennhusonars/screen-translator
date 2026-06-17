@@ -1,3 +1,25 @@
+screen-translator (2.0.0-1) stable; urgency=medium
+
+  * Major popup refactor — eliminates window-stack thrash that caused other
+    apps (Chrome, VS Code, etc.) to repeatedly lose/regain focus and the
+    sidebar icon to flash on/off whenever auto-translate was enabled.
+    - Switched popup type hint to NOTIFICATION (was TOOLTIP)
+    - Removed per-show present()/set_keep_above; popup is mapped via show()
+      only, so Mutter no longer reshuffles the focus stack on every result
+    - Added skip_taskbar/skip_pager/focus_on_map hints
+    - Widget tree built once and reused via a Gtk.Stack (loading/error/result)
+      instead of destroyed+recreated for every selection
+  * Replaced 100 ms mouse-position polling with a passive Gdk.Seat grab for
+    outside-click dismiss.
+  * Added request token: stale translation results from earlier selections
+    are now dropped instead of overwriting the popup with old content.
+  * Clipboard monitor wires through user-configured delay/min/max from config
+    (previously hardcoded), exposes stop() for clean shutdown, and uses
+    Event.wait() so the polling threads exit promptly on quit.
+  * Renamed misleading internal `_delay_ms` (stored seconds) to `_settle_seconds`.
+
+ -- sonnn <sonnn@localhost>  Fri, 05 Jun 2026 12:00:00 +0700
+
 screen-translator (1.5.8-1) stable; urgency=low
 
   * Hybrid Wayland fix: use GDK_BACKEND=x11 (XWayland) for window positioning

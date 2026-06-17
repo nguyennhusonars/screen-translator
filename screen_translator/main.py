@@ -33,6 +33,7 @@ class ScreenTranslator:
                  self._config["auto_translate"])
 
         self._popup = None
+        self._request_seq = 0   # increments per selection; stale callbacks dropped
         self._tray = TrayIcon(
             self._config,
             on_toggle_auto=self._on_toggle_auto,
@@ -41,14 +42,17 @@ class ScreenTranslator:
             on_change_target=self._on_change_target,
             on_quit=self._quit,
         )
-        self._clipboard = ClipboardMonitor(self._on_text_selected)
+        self._clipboard = ClipboardMonitor(
+            self._on_text_selected,
+            delay_ms=self._config.get("selection_delay_ms", 600),
+            min_length=self._config.get("min_text_length", 2),
+            max_length=self._config.get("max_text_length", 5000),
+        )
         log.info("Screen Translator started. Waiting for text selections...")
 
-    def _get_new_popup(self):
-        if self._popup is not None:
-            self._popup.dismiss()
-            self._popup.destroy()
-        self._popup = TranslationPopup()
+    def _ensure_popup(self):
+        if self._popup is None:
+            self._popup = TranslationPopup()
         return self._popup
 
     def _on_text_selected(self, text):
@@ -61,8 +65,11 @@ class ScreenTranslator:
         if not self._config.get("auto_translate", True):
             return
 
-        log.info("Translating: %.60s...", text)
-        popup = self._get_new_popup()
+        self._request_seq += 1
+        seq = self._request_seq
+
+        log.info("Translating [#%d]: %.60s...", seq, text)
+        popup = self._ensure_popup()
         GLib.idle_add(popup.show_loading)
 
         source = self._config.get("source_language", "auto")
@@ -70,22 +77,28 @@ class ScreenTranslator:
         translate_async(
             text,
             target_lang=target,
-            callback=self._on_translation_done,
+            callback=lambda result: self._on_translation_done(seq, result),
             source_lang=source,
         )
 
-    def _on_translation_done(self, result):
+    def _on_translation_done(self, seq, result):
         """Called from background thread when translation completes."""
+        if seq != self._request_seq:
+            log.debug("Dropping stale translation [#%d] (current: #%d)", seq, self._request_seq)
+            return
+
         if result and result.get("error"):
             log.error("Translation error: %s", result["error"])
         elif result:
-            log.info("Translated: %.60s...", result.get("translated", ""))
+            log.info("Translated [#%d]: %.60s...", seq, result.get("translated", ""))
 
         def _show():
-            if self._popup:
-                self._popup.show_result(result)
-                timeout = self._config.get("popup_timeout", 8)
-                self._popup.set_auto_dismiss(timeout)
+            if seq != self._request_seq or self._popup is None:
+                return False
+            self._popup.show_result(result)
+            timeout = self._config.get("popup_timeout", 8)
+            self._popup.set_auto_dismiss(timeout)
+            return False
         GLib.idle_add(_show)
 
     def _on_toggle_autostart(self, enabled):
@@ -112,6 +125,8 @@ class ScreenTranslator:
 
     def _quit(self):
         log.info("Quitting")
+        if self._clipboard is not None:
+            self._clipboard.stop()
         Gtk.main_quit()
 
     def run(self):

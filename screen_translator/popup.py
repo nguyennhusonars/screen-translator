@@ -144,7 +144,6 @@ class TranslationPopup(Gtk.Window):
         self._translated_text = ""
         self._source_lang = "auto"
         self._target_lang = "en"
-        self._grabbed_seat = None
 
         self._build_widgets()
 
@@ -294,7 +293,6 @@ class TranslationPopup(Gtk.Window):
     def dismiss(self):
         """Hide the popup."""
         self._cancel_timeout()
-        self._release_grab()
         self.hide()
 
     def set_auto_dismiss(self, seconds):
@@ -363,40 +361,3 @@ class TranslationPopup(Gtk.Window):
         y = max(geom.y, y)
 
         self.move(x, y)
-        self._install_grab()
-
-    def _install_grab(self):
-        """Passive seat grab: catches outside clicks without 100ms polling.
-
-        BUTTON_PRESS_MASK alone — owner_events=True so events on our window
-        deliver normally and we only see foreign button presses to dismiss.
-        """
-        gdk_win = self.get_window()
-        if gdk_win is None:
-            return
-        display = Gdk.Display.get_default()
-        seat = display.get_default_seat()
-        capabilities = Gdk.SeatCapabilities.POINTER
-        status = seat.grab(
-            gdk_win,
-            capabilities,
-            True,        # owner_events: our widgets still get normal events
-            None,        # cursor
-            None,        # event
-            None,        # prepare_func
-        )
-        if status == Gdk.GrabStatus.SUCCESS:
-            self._grabbed_seat = seat
-            # Listen for foreign button presses on the root via the grabbed seat.
-            self.add_events(Gdk.EventMask.BUTTON_PRESS_MASK)
-        else:
-            log.debug("Seat grab failed (%s); outside-click dismiss disabled this round.", status)
-            self._grabbed_seat = None
-
-    def _release_grab(self):
-        if self._grabbed_seat is not None:
-            try:
-                self._grabbed_seat.ungrab()
-            except Exception:
-                pass
-            self._grabbed_seat = None

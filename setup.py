@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="screen-translator",
-    version="2.0.2",
+    version="2.0.3",
     description="Auto-translate highlighted text on Ubuntu",
     author="sonnn",
     packages=find_packages(),

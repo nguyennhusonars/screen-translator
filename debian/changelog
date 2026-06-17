@@ -1,3 +1,12 @@
+screen-translator (2.0.3-1) stable; urgency=low
+
+  * Implemented Hybrid Clipboard Monitor for Wayland:
+    - CLIPBOARD: Uses native GTK event-driven owner-change (synced flawlessly by XWayland).
+    - PRIMARY: Uses a 1-second interval wl-paste poll (GNOME blocks XWayland from reading primary).
+  * Removed Gdk.Seat global grab from TranslationPopup to fix focus/defocus issues and prevent lag.
+
+ -- sonnn <sonnn@localhost>  Wed, 17 Jun 2026 17:15:00 +0700
+
 screen-translator (2.0.2-1) stable; urgency=low
 
   * Removed wl-paste entirely! GNOME Wayland lacks --watch support.

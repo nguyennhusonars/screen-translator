@@ -2,13 +2,13 @@
 
 Hybrid approach:
 - CLIPBOARD: Uses native GTK owner-change (XWayland syncs this perfectly).
-- PRIMARY: Polls wl-paste --primary since Wayland blocks passive primary reading.
+- PRIMARY: Uses native GTK owner-change as a trigger, then runs wl-paste --primary
+  once to read the text. No polling, no background threads, no lag!
 """
 
 import os
 import logging
 import subprocess
-import threading
 import gi
 gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
@@ -28,45 +28,60 @@ class ClipboardMonitor:
         self._last_clipboard = ""
         self._last_dispatched = ""
 
-        self._pending_id = None
-        self._stop_event = threading.Event()
+        self._pending_clipboard_id = None
+        self._pending_primary_id = None
 
-        log.info("Starting hybrid clipboard monitor (GTK for clipboard, wl-paste for primary).")
+        log.info("Starting passive hybrid clipboard monitor (GTK owner-change triggers).")
         
         # 1. Native GTK for CLIPBOARD
         self._gtk_clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
         self._gtk_clipboard.connect("owner-change", self._on_clipboard_change)
 
-        # 2. Polling wl-paste for PRIMARY
-        self._thread = threading.Thread(target=self._wl_primary_loop, daemon=True)
-        self._thread.start()
+        # 2. Native GTK for PRIMARY owner-change trigger
+        self._gtk_primary = Gtk.Clipboard.get(Gdk.SELECTION_PRIMARY)
+        self._gtk_primary.connect("owner-change", self._on_primary_change)
 
     def set_enabled(self, enabled):
         self._enabled = enabled
 
     def stop(self):
-        self._stop_event.set()
-        if self._pending_id is not None:
-            GLib.source_remove(self._pending_id)
-            self._pending_id = None
+        if self._pending_clipboard_id is not None:
+            GLib.source_remove(self._pending_clipboard_id)
+            self._pending_clipboard_id = None
+        if self._pending_primary_id is not None:
+            GLib.source_remove(self._pending_primary_id)
+            self._pending_primary_id = None
 
     # --- GTK CLIPBOARD ---
     def _on_clipboard_change(self, clipboard, event):
         if not self._enabled:
             return
-        if self._pending_id is not None:
-            GLib.source_remove(self._pending_id)
-        self._pending_id = GLib.timeout_add(int(self._settle_seconds * 1000), self._read_gtk_clipboard)
+        if self._pending_clipboard_id is not None:
+            GLib.source_remove(self._pending_clipboard_id)
+        self._pending_clipboard_id = GLib.timeout_add(
+            int(self._settle_seconds * 1000), 
+            self._read_gtk_clipboard
+        )
 
     def _read_gtk_clipboard(self):
-        self._pending_id = None
+        self._pending_clipboard_id = None
         text = (self._gtk_clipboard.wait_for_text() or "").strip()
         if text and text != self._last_clipboard:
             self._last_clipboard = text
             self._dispatch(text)
         return False
 
-    # --- WL-PASTE PRIMARY ---
+    # --- PRIMARY owner-change trigger ---
+    def _on_primary_change(self, clipboard, event):
+        if not self._enabled:
+            return
+        if self._pending_primary_id is not None:
+            GLib.source_remove(self._pending_primary_id)
+        self._pending_primary_id = GLib.timeout_add(
+            int(self._settle_seconds * 1000), 
+            self._read_wl_primary
+        )
+
     def _wl_paste_primary(self):
         try:
             result = subprocess.run(
@@ -81,20 +96,13 @@ class ClipboardMonitor:
             pass
         return ""
 
-    def _wl_primary_loop(self):
-        poll_interval = 1.0  # Poll once per second to avoid lag
-        while not self._stop_event.is_set():
-            if self._enabled:
-                text = self._wl_paste_primary()
-                if text and text != self._last_primary:
-                    if self._stop_event.wait(self._settle_seconds):
-                        break
-                    settled = self._wl_paste_primary()
-                    if settled and settled == text:
-                        self._last_primary = text
-                        GLib.idle_add(self._dispatch, text)
-            if self._stop_event.wait(poll_interval):
-                break
+    def _read_wl_primary(self):
+        self._pending_primary_id = None
+        text = self._wl_paste_primary()
+        if text and text != self._last_primary:
+            self._last_primary = text
+            self._dispatch(text)
+        return False
 
     # --- DISPATCH ---
     def _dispatch(self, text):

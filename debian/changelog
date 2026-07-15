@@ -1,3 +1,12 @@
+screen-translator (2.0.4-1) stable; urgency=low
+
+  * Switched clipboard monitoring to a completely passive, event-driven hybrid model.
+  * Replaced primary selection polling with GTK owner-change signal triggers.
+  * Runs wl-paste --primary only once when a selection change is detected, eliminating
+    1-second background polling stutters and active-window focus loss/lag.
+
+ -- sonnn <sonnn@localhost>  Wed, 15 Jul 2026 16:40:00 +0700
+
 screen-translator (2.0.3-1) stable; urgency=low
 
   * Implemented Hybrid Clipboard Monitor for Wayland:

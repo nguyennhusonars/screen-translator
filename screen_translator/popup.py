@@ -348,11 +348,16 @@ class TranslationPopup(Gtk.Window):
 
         monitor = display.get_monitor_at_point(mx, my) or display.get_primary_monitor()
         geom = monitor.get_geometry()
+        log.info("Monitor geom: x=%d, y=%d, w=%d, h=%d", geom.x, geom.y, geom.width, geom.height)
+
+        # Ensure GdkWindow is created (realized) so move() is processed by X11
+        self.realize()
 
         # Calculate exact natural size of window contents before showing
         min_sz, nat_sz = self.get_preferred_size()
         pw = max(nat_sz.width, 350)
         ph = max(nat_sz.height, 120)
+        log.info("Calculated window size: %dx%d", pw, ph)
 
         x = mx + 15
         y = my + 20
@@ -363,5 +368,6 @@ class TranslationPopup(Gtk.Window):
         x = max(geom.x, x)
         y = max(geom.y, y)
 
+        log.info("Moving window to: (%d, %d)", x, y)
         self.move(x, y)
         self.show_all()

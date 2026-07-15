@@ -1,3 +1,14 @@
+screen-translator (2.0.5-1) stable; urgency=low
+
+  * Unconditionally forced GDK_BACKEND=x11 (removed setdefault override check) to ensure
+    XWayland positioning rules are strictly followed even if wayland GDK backend is
+    preferred in user's env.
+  * Replaced screen-drawing race condition of get_allocated_width with get_preferred_size
+    to ensure coordinates are computed perfectly before mapping/showing the window.
+  * Added logs for debugging active GDK display backend class and cursor coordinates.
+
+ -- sonnn <sonnn@localhost>  Wed, 15 Jul 2026 16:47:00 +0700
+
 screen-translator (2.0.4-1) stable; urgency=low
 
   * Switched clipboard monitoring to a completely passive, event-driven hybrid model.
